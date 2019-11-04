@@ -27,14 +27,14 @@
 #define LPTIM_CLOCK CONFIG_STM32_LPTIM_CLOCK
 #define LPTIM_TIMEBASE CONFIG_STM32_LPTIM_TIMEBASE
 
-/* nb of LPTIM counter unit per ms */
-#define COUNT_PER_MS (LPTIM_CLOCK / 1000)
-
 /* nb of LPTIM counter unit per kernel tick  */
 #define COUNT_PER_TICK (LPTIM_CLOCK / CONFIG_SYS_CLOCK_TICKS_PER_SEC)
 
-static u32_t last_cnt;
-static u32_t accumulated_lptim_ms;
+/* a 32bit value cannot exceed 0XFFFFFFFF/CONFIG_STM32_LPTIM_TIMEBASE seconds.
+ * This is for example about 67000 seconds
+ * with LPTIM timer counting up to 2000ms when clocked by LSI
+ */
+static u32_t accumulated_lptim_cnt;
 
 static struct k_spinlock lock;
 
@@ -48,21 +48,21 @@ static void lptim_irq_handler(struct device *unused)
 		k_spinlock_key_t key = k_spin_lock(&lock);
 
 		/* LPTIM1 CNT could have already been reset */
-		u32_t cnt_value = LL_LPTIM_GetAutoReload(LPTIM1) + 1
-				+ LL_LPTIM_GetCounter(LPTIM1);
-
-		/* do not set ARR yet, z_clock_announce will do */
-
-		/* a next timeout will be raised */
-		LL_LPTIM_ClearFLAG_ARRM(LPTIM1);
-		/* reset last_cnt for a next call to 'elapsed' */
-
-		k_spin_unlock(&lock, key);
+		volatile u32_t cnt_value = LL_LPTIM_GetAutoReload(LPTIM1) + 1
+						+ LL_LPTIM_GetCounter(LPTIM1);
 
 		/* increase the total nb of lptim count
-		 * used in the z_timer_cycle_get_32() function
+		 * used in the z_timer_cycle_get_32() function.
+		 * Reading the CNT register gives a reliable value
 		 */
-		accumulated_lptim_ms += ((cnt_value * 1000) / LPTIM_CLOCK);
+		accumulated_lptim_cnt += LL_LPTIM_GetAutoReload(LPTIM1) + 1
+						+ LL_LPTIM_GetCounter(LPTIM1);
+
+		/* do not set ARR yet, z_clock_announce will do */
+		/* a next timeout will be raised */
+		LL_LPTIM_ClearFLAG_ARRM(LPTIM1);
+
+		k_spin_unlock(&lock, key);
 
 		/* announce the elapsed time in ms, cnt_value is 16bit */
 		u32_t dticks = (cnt_value
@@ -144,8 +144,7 @@ int z_clock_driver_init(struct device *device)
 	LL_LPTIM_EnableIT_ARRM(LPTIM1);
 	LL_LPTIM_ClearFLAG_ARRM(LPTIM1);
 
-	last_cnt = 0;
-	accumulated_lptim_ms = 0;
+	accumulated_lptim_cnt = 0;
 
 	if (IS_ENABLED(CONFIG_TICKLESS_KERNEL)) {
 		/* Enable the LPTIM1 counter */
@@ -223,6 +222,7 @@ void z_clock_set_timeout(s32_t ticks, bool idle)
 
 	/* read current counter value (cannot exceed 16bit) */
 	u32_t cnt_value = LL_LPTIM_GetCounter(LPTIM1) + 1;
+
 	/* calculate the next arr value (cannot exceed 16bit)
 	 * adjust the next ARR match value to align on Ticks
 	 * from the current counter value to first next Tick
@@ -270,7 +270,7 @@ u32_t z_clock_elapsed(void)
 	/* gives the value of LPTIM1 counter (ms)
 	 * since the previous 'announce'
 	 */
-	u32_t ret = ((cnt_value - last_cnt) * 1000) / LPTIM_CLOCK;
+	u32_t ret = (cnt_value * 1000) / LPTIM_CLOCK;
 
 	/* convert to ticks */
 	return z_ms_to_ticks(ret);
@@ -278,16 +278,30 @@ u32_t z_clock_elapsed(void)
 
 u32_t z_timer_cycle_get_32(void)
 {
+	/* just gives the accumulated count in a number of hw cycles */
+	volatile u32_t last_cnt;
 	k_spinlock_key_t key = k_spin_lock(&lock);
 
-	/* Just return the absolute value of LPTIM1 counter */
-	u32_t cnt_value = LL_LPTIM_GetCounter(LPTIM1);
+	/* It should be noted that to read reliably the content
+	 * of the LPTIM_CNT register, two successive read access
+	 * must be performed and compared
+	 */
+	volatile u32_t ret = (LL_LPTIM_GetCounter(LPTIM1));
+
+	/* avoid non monotonic cycle value : Reading the CNT register twice */
+	while (ret < last_cnt) {
+		last_cnt = LL_LPTIM_GetCounter(LPTIM1);
+	}
+	ret = accumulated_lptim_cnt + last_cnt;
 
 	k_spin_unlock(&lock, key);
 
-	/* give accumulated time in ms */
-	u32_t ret = accumulated_lptim_ms + (cnt_value * 1000) / LPTIM_CLOCK;
-
 	/* convert in hw cycles (keeping 32bit value) */
-	return (u32_t)(ret * (sys_clock_hw_cycles_per_sec() / 1000));
+	if (ret < 32) {
+		/* with small values, change calculation to reduce unaccurancy */
+		ret = (ret * (sys_clock_hw_cycles_per_sec() / LPTIM_CLOCK));
+	} else {
+		ret = (ret / (LPTIM_CLOCK / 1000)) * (sys_clock_hw_cycles_per_sec() / 1000);
+	}
+	return ret;
 }
