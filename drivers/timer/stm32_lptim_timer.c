@@ -26,7 +26,6 @@
 
 #define LPTIM_CLOCK CONFIG_STM32_LPTIM_CLOCK
 #define LPTIM_TIMEBASE CONFIG_STM32_LPTIM_TIMEBASE
-
 /* nb of LPTIM counter unit per kernel tick  */
 #define COUNT_PER_TICK (LPTIM_CLOCK / CONFIG_SYS_CLOCK_TICKS_PER_SEC)
 
@@ -36,49 +35,59 @@
 static u32_t accumulated_lptim_cnt;
 
 static struct k_spinlock lock;
+volatile u8_t  lptim_fired = 0;
 
 static void lptim_irq_handler(struct device *unused)
 {
-
 	ARG_UNUSED(unused);
 
-	if ((LL_LPTIM_IsActiveFlag_ARRM(LPTIM1) != 0)
-		&& LL_LPTIM_IsEnabledIT_ARRM(LPTIM1) != 0) {
+	k_spinlock_key_t key = k_spin_lock(&lock);
 
-		k_spinlock_key_t key = k_spin_lock(&lock);
+	/* LPTIM1 CNT register is already reset after one autoreload */
+	volatile u32_t lp_time = LL_LPTIM_GetCounter(LPTIM1);
 
-		/* LPTIM1 CNT register is already reset after one autoreload */
-		volatile u32_t lp_time = LL_LPTIM_GetCounter(LPTIM1);
+	/* It should be noted that to read reliably the content
+	 * of the LPTIM_CNT register, two successive read accesses
+	 * must be performed and compared
+	 */
 
-		/* It should be noted that to read reliably the content
-		 * of the LPTIM_CNT register, two successive read accesses
-		 * must be performed and compared
-		 */
-
-		while (lp_time != LL_LPTIM_GetCounter(LPTIM1)) {
-			lp_time = LL_LPTIM_GetCounter(LPTIM1);
-		}
-		lp_time += LL_LPTIM_GetAutoReload(LPTIM1) + 1;
-
-		/* do not change ARR yet, z_clock_announce will do */
-		LL_LPTIM_ClearFLAG_ARRM(LPTIM1);
-
-		/* increase the total nb of lptim count
-		 * used in the z_timer_cycle_get_32() function.
-		 * Reading the CNT register gives a reliable value
-		 */
-		accumulated_lptim_cnt += lp_time;
-
-		k_spin_unlock(&lock, key);
-
-		/* announce the elapsed time in ms (count register is 16bit) */
-		u32_t dticks = (lp_time
-				* CONFIG_SYS_CLOCK_TICKS_PER_SEC)
-				/ LPTIM_CLOCK;
-
-		z_clock_announce(IS_ENABLED(CONFIG_TICKLESS_KERNEL)
-				? dticks : 1);
+	while (lp_time != LL_LPTIM_GetCounter(LPTIM1)) {
+		lp_time = LL_LPTIM_GetCounter(LPTIM1);
 	}
+
+	if (lptim_fired) {
+		lptim_fired = 0;
+#if defined(LPTIM_CR_COUNTRST)
+		LL_LPTIM_ResetCounter(LPTIM1);
+#endif
+	} else {
+
+		if ((LL_LPTIM_IsActiveFlag_ARRM(LPTIM1) != 0)
+			&& LL_LPTIM_IsEnabledIT_ARRM(LPTIM1) != 0) {
+
+			/* LPTIM1 CNT register is already reset after one autoreload */
+			lp_time += LL_LPTIM_GetAutoReload(LPTIM1) + 1;
+
+			/* do not change ARR yet, z_clock_announce will do */
+			LL_LPTIM_ClearFLAG_ARRM(LPTIM1);
+
+			/* increase the total nb of lptim count
+			 * used in the z_timer_cycle_get_32() function.
+			 * Reading the CNT register gives a reliable value
+			 */
+			}
+	}
+
+	accumulated_lptim_cnt += lp_time;
+
+	k_spin_unlock(&lock, key);
+
+	/* announce the elapsed time in ms (count register is 16bit) */
+	u64_t dticks = (lp_time
+			* CONFIG_SYS_CLOCK_TICKS_PER_SEC)
+			/ LPTIM_CLOCK;
+	z_clock_announce(IS_ENABLED(CONFIG_TICKLESS_KERNEL)
+			? (u32_t)dticks : 1);
 }
 
 int z_clock_driver_init(struct device *device)
@@ -151,7 +160,7 @@ int z_clock_driver_init(struct device *device)
 	LL_LPTIM_ClearFlag_ARROK(LPTIM1);
 
 	accumulated_lptim_cnt = 0;
-
+	lptim_fired = 0;
 	/* Enable the LPTIM1 counter */
 	LL_LPTIM_Enable(LPTIM1);
 
@@ -178,7 +187,6 @@ int z_clock_driver_init(struct device *device)
 void z_clock_set_timeout(s32_t ticks, bool idle)
 {
 	/* new LPTIM1 AutoReload value to set (aligned on Kernel ticks) */
-	u32_t next_arr = 0;
 
 	ARG_UNUSED(idle);
 
@@ -227,21 +235,40 @@ void z_clock_set_timeout(s32_t ticks, bool idle)
 		lp_time = LL_LPTIM_GetCounter(LPTIM1);
 	}
 
+	/* In case of counter roll-over, add this value,
+	 * even if the irq has not yet been handled
+	 */
+	if ((LL_LPTIM_IsActiveFlag_ARRM(LPTIM1) != 0)
+	  && LL_LPTIM_IsEnabledIT_ARRM(LPTIM1) != 0) {
+		lp_time += LL_LPTIM_GetAutoReload(LPTIM1) + 1;
+	}
+
 	/* calculate the next arr value (cannot exceed 16bit)
 	 * adjust the next ARR match value to align on Ticks
 	 * from the current counter value to first next Tick
 	 */
-	next_arr = (((lp_time * CONFIG_SYS_CLOCK_TICKS_PER_SEC)
+	u32_t next_arr = (((lp_time * CONFIG_SYS_CLOCK_TICKS_PER_SEC)
 			/ LPTIM_CLOCK) + 1) * LPTIM_CLOCK
 			/ (CONFIG_SYS_CLOCK_TICKS_PER_SEC);
 	/* add count unit from the expected nb of Ticks */
 	next_arr = next_arr + ((u32_t)(ticks) * LPTIM_CLOCK)
-			/ CONFIG_SYS_CLOCK_TICKS_PER_SEC + 1;
+			/ CONFIG_SYS_CLOCK_TICKS_PER_SEC;
 
 	/* maximise to TIMEBASE */
 	if (next_arr > LPTIM_TIMEBASE) {
 		next_arr = LPTIM_TIMEBASE;
 	}
+
+	/* If we are close to the roll over of the ticker counter
+	 * change current tick so it can be compared with buffer.
+	 * If this event got outdated fire interrupt right now,
+	 * else schedule it normally.
+	 */
+	if (next_arr <= ((LL_LPTIM_GetCounter(LPTIM1) + 1) & LPTIM_TIMEBASE)) {
+		NVIC_SetPendingIRQ(DT_LPTIM_1_IRQ);
+		lptim_fired = 1;
+	}
+
 	/* run timer and wait for the reload match */
 	LL_LPTIM_SetAutoReload(LPTIM1, next_arr);
 
@@ -269,15 +296,29 @@ u32_t z_clock_elapsed(void)
 		lp_time = LL_LPTIM_GetCounter(LPTIM1);
 	}
 
+	/* In case of counter roll-over, add this value,
+	 * even if the irq has not yet been handled
+	 */
+	if ((LL_LPTIM_IsActiveFlag_ARRM(LPTIM1) != 0)
+	  && LL_LPTIM_IsEnabledIT_ARRM(LPTIM1) != 0) {
+		lp_time += LL_LPTIM_GetAutoReload(LPTIM1) + 1;
+	}
+
 	k_spin_unlock(&lock, key);
 
 	/* gives the value of LPTIM1 counter (ms)
 	 * since the previous 'announce'
 	 */
-	u32_t ret = ((lp_time + 1) * 1000) / LPTIM_CLOCK;
+#if defined(CONFIG_STM32_LPTIM_CLOCK_LSI)
+	u32_t ret = (lp_time * (CONFIG_SYS_CLOCK_TICKS_PER_SEC / 1000) )
+		/ (LPTIM_CLOCK / 1000);
 
-	/* convert to ticks */
-	return z_ms_to_ticks(ret);
+	return (u32_t)(ret);
+#else
+	u64_t ret = (lp_time * CONFIG_SYS_CLOCK_TICKS_PER_SEC) / LPTIM_CLOCK;
+
+	return (u32_t)(ret);
+#endif /* CONFIG_STM32_LPTIM_CLOCK_LSI */
 }
 
 u32_t z_timer_cycle_get_32(void)
@@ -298,9 +339,23 @@ u32_t z_timer_cycle_get_32(void)
 	}
 	lp_time += accumulated_lptim_cnt;
 
+	/* In case of counter roll-over, add this value,
+	 * even if the irq has not yet been handled
+	 */
+	if ((LL_LPTIM_IsActiveFlag_ARRM(LPTIM1) != 0)
+	  && LL_LPTIM_IsEnabledIT_ARRM(LPTIM1) != 0) {
+		lp_time += LL_LPTIM_GetAutoReload(LPTIM1) + 1;
+	}
+
+	/* convert lptim count in a nb of hw cycles with precision */
+#if defined(CONFIG_STM32_LPTIM_CLOCK_LSI)
+	u64_t ret = lp_time * ((sys_clock_hw_cycles_per_sec() / 1000)
+		/ (LPTIM_CLOCK / 1000));
+#else
+	u64_t ret = lp_time * (sys_clock_hw_cycles_per_sec() / LPTIM_CLOCK);
+#endif /* CONFIG_STM32_LPTIM_CLOCK_LSI */
+
 	k_spin_unlock(&lock, key);
 
-	/* convert in hw cycles (keeping 32bit value) */
-	return ((lp_time / (LPTIM_CLOCK / 1000))
-		* (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000));
+	return (u32_t)(ret);
 }
