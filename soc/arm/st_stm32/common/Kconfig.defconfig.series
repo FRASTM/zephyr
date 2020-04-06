@@ -7,10 +7,18 @@
 
 if SOC_FAMILY_STM32
 
+choice STM32_LPTIM_CLOCK
+	default STM32_LPTIM_CLOCK_LSI
+	depends on STM32_LPTIM_TIMER
+endchoice
+
 config CORTEX_M_SYSTICK
 	bool
 	default n if STM32_LPTIM_TIMER
 	default y if !STM32_LPTIM_TIMER
+
+config SYS_CLOCK_TICKS_PER_SEC
+	default 1000 if STM32_LPTIM_TIMER
 
 config CLOCK_CONTROL_STM32_CUBE
 	default y
