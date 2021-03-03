@@ -668,6 +668,14 @@ static inline void async_evt_rx_rdy(struct uart_stm32_data *data)
 		uart_stm32_invalidate_cache(
 			data->dma_rx.buffer,
 			data->dma_rx.buffer_length);
+/*
+		if (data->dma_rx.buffer != event.data.rx.buf) {
+			memcpy(event.data.rx.buf,
+				data->dma_rx.dma_aligned_buffer,
+				data->dma_rx_buffer_len);
+		}
+*/
+	}
 #endif /* CONFIG_UART_STM32_UNALIGNED_DMA */
 	struct uart_event event = {
 		.type = UART_RX_RDY,
@@ -688,7 +696,6 @@ static inline void async_evt_rx_rdy(struct uart_stm32_data *data)
 static inline void async_evt_rx_err(struct uart_stm32_data *data, int err_code)
 {
 	LOG_DBG("rx error: %d", err_code);
-
 #ifdef CONFIG_UART_STM32_UNALIGNED_DMA
 	/* on reception, invalidate the cache before using the data */
 	if (data->dma_rx.buffer != NULL) {
@@ -744,6 +751,7 @@ static inline void async_evt_tx_abort(struct uart_stm32_data *data)
 
 static inline void async_evt_rx_buf_request(struct uart_stm32_data *data)
 {
+
 	struct uart_event evt = {
 		.type = UART_RX_BUF_REQUEST,
 	};
@@ -753,6 +761,7 @@ static inline void async_evt_rx_buf_request(struct uart_stm32_data *data)
 
 static inline void async_evt_rx_buf_release(struct uart_stm32_data *data)
 {
+
 	struct uart_event evt = {
 		.type = UART_RX_BUF_RELEASED,
 		.data.rx_buf.buf = data->dma_rx.buffer,
@@ -1017,13 +1026,29 @@ static int uart_stm32_async_tx(const struct device *dev,
 	if (data->dma_tx.buffer_length != 0) {
 		return -EBUSY;
 	}
-
 #if CONFIG_UART_STM32_UNALIGNED_DMA
 	/*
 	 * trigger a cache clean before starting a DMA operation
 	 * to ensure that all the data are committed to the subsystem memory
 	 */
 	if (tx_data != NULL) {
+		uint32_t addr_diff = UART_STM32_ROUND_UP(tx_data)
+							- (uint32_t)tx_data;
+/*
+		if (addr_diff == 0 && buf_size >= __SCB_DCACHE_LINE_SIZE) {
+			buf_size = UART_STM32_ROUND_DOWN(buf_size);
+		} else {
+			if (addr_diff != 0) {
+				buf_size = MIN(buf_size, addr_diff);
+			}
+
+			buf_size = MIN(buf_size, __SCB_DCACHE_LINE_SIZE);
+
+			memcpy(data->dma_tx.dma_aligned_buffer,
+					data->dma_tx.buffer, buf_size);
+			tx_data = data->dma_tx.dma_aligned_buffer;
+		}
+*/
 		uart_stm32_flush_cache(tx_data, buf_size);
 	}
 #endif /* CONFIG_UART_STM32_UNALIGNED_DMA */
@@ -1077,6 +1102,28 @@ static int uart_stm32_async_rx_enable(const struct device *dev,
 		LOG_WRN("RX was already enabled");
 		return -EBUSY;
 	}
+#ifdef CONFIG_UART_STM32_UNALIGNED_DMA
+	/*
+	 * trigger a cache clean before starting a DMA operation
+	 * to ensure that all the data are committed to the subsystem memory
+	 */
+	if (rx_buf != NULL) {
+		uint32_t addr_diff = UART_STM32_ROUND_UP(rx_buf)
+							- (uint32_t)rx_buf;
+/*
+		if (addr_diff == 0 && buf_size >= __SCB_DCACHE_LINE_SIZE) {
+			buf_size = UART_STM32_ROUND_DOWN(buf_size);
+		} else {
+			if (addr_diff != 0) {
+				buf_size = MIN(buf_size, addr_diff);
+			}
+
+			buf_size = MIN(buf_size, __SCB_DCACHE_LINE_SIZE);
+			rx_buf = data->dma_rx.dma_aligned_buffer;
+		}
+*/
+	}
+#endif /* CONFIG_UART_STM32_UNALIGNED_DMA */
 
 	data->dma_rx.offset = 0;
 	data->dma_rx.buffer = rx_buf;
