@@ -20,3 +20,17 @@ config UART_STM32
 	  This option enables the UART driver for STM32 family of
 	  processors.
 	  Say y if you wish to use serial port on STM32 MCU.
+
+config UART_STM32_UNALIGNED_DMA
+	bool "STM32 MCU UART Unaligned DMA Support"
+	depends on UART_ASYNC_API
+	depends on CPU_CORTEX_M7
+	default y
+	help
+	  Support unaligned DMA buffer. When DMA buffers are not aligned on
+	  cache line boundaries, or their size is not a multiple of the
+	  the cache line size, the UART driver will use a temporary buffer
+	  that is correctly aligned, so the user doesn't have to care
+	  about it. This of course comes with the cost of an extra memcpy
+	  so if the user is sure the UART buffers are all correctly aligned
+	  the option can be disabled.

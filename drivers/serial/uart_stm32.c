@@ -52,6 +52,28 @@ LOG_MODULE_REGISTER(uart_stm32);
 
 #define TIMEOUT 1000
 
+#if CONFIG_UART_STM32_UNALIGNED_DMA
+
+#define UART_STM32_ROUND_UP(x) ROUND_UP((uint32_t)(x), __SCB_DCACHE_LINE_SIZE)
+#define UART_STM32_ROUND_DOWN(x) \
+			ROUND_DOWN((uint32_t)(x), __SCB_DCACHE_LINE_SIZE)
+
+void uart_stm32_flush_cache(const void *ptr, uint32_t size)
+{
+	if ((SCB->CCR & SCB_CCR_DC_Msk) != 0U && size > 0) {
+		SCB_CleanDCache_by_Addr((uint32_t *)ptr, size);
+	}
+}
+
+void uart_stm32_invalidate_cache(void *ptr, uint32_t size)
+{
+	if ((SCB->CCR & SCB_CCR_DC_Msk) != 0U && size > 0) {
+		SCB_InvalidateDCache_by_Addr((uint32_t *)ptr, size);
+	}
+}
+
+#endif /* CONFIG_UART_STM32_UNALIGNED_DMA */
+
 static inline void uart_stm32_set_baudrate(const struct device *dev,
 					   uint32_t baud_rate)
 {
@@ -640,6 +662,13 @@ static inline void async_evt_rx_rdy(struct uart_stm32_data *data)
 {
 	LOG_DBG("rx_rdy: (%d %d)", data->dma_rx.offset, data->dma_rx.counter);
 
+#ifdef CONFIG_UART_STM32_UNALIGNED_DMA
+	/* on reception, invalidate the cache before using the data */
+	if (data->dma_rx.buffer != NULL) {
+		uart_stm32_invalidate_cache(
+			data->dma_rx.buffer,
+			data->dma_rx.buffer_length);
+#endif /* CONFIG_UART_STM32_UNALIGNED_DMA */
 	struct uart_event event = {
 		.type = UART_RX_RDY,
 		.data.rx.buf = data->dma_rx.buffer,
@@ -660,6 +689,14 @@ static inline void async_evt_rx_err(struct uart_stm32_data *data, int err_code)
 {
 	LOG_DBG("rx error: %d", err_code);
 
+#ifdef CONFIG_UART_STM32_UNALIGNED_DMA
+	/* on reception, invalidate the cache before using the data */
+	if (data->dma_rx.buffer != NULL) {
+		uart_stm32_invalidate_cache(
+			data->dma_rx.buffer,
+			data->dma_rx.counter);
+	}
+#endif /* CONFIG_UART_STM32_UNALIGNED_DMA */
 	struct uart_event event = {
 		.type = UART_RX_STOPPED,
 		.data.rx_stop.reason = err_code,
@@ -981,6 +1018,15 @@ static int uart_stm32_async_tx(const struct device *dev,
 		return -EBUSY;
 	}
 
+#if CONFIG_UART_STM32_UNALIGNED_DMA
+	/*
+	 * trigger a cache clean before starting a DMA operation
+	 * to ensure that all the data are committed to the subsystem memory
+	 */
+	if (tx_data != NULL) {
+		uart_stm32_flush_cache(tx_data, buf_size);
+	}
+#endif /* CONFIG_UART_STM32_UNALIGNED_DMA */
 	data->dma_tx.buffer = (uint8_t *)tx_data;
 	data->dma_tx.buffer_length = buf_size;
 	data->dma_tx.timeout = timeout;

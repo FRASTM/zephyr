@@ -36,6 +36,13 @@ struct uart_dma_stream {
 	bool src_addr_increment;
 	bool dst_addr_increment;
 	int fifo_threshold;
+#if CONFIG_UART_STM32_UNALIGNED_DMA
+	uint8_t dma_aligned_buffer[__SCB_DCACHE_LINE_SIZE]
+					__aligned(__SCB_DCACHE_LINE_SIZE);
+#else /* CONFIG_UART_STM32_UNALIGNED_DMA */
+	uint32_t dma_dummy_buffer;
+#endif /* CONFIG_UART_STM32_UNALIGNED_DMA */
+
 	struct dma_block_config blk_cfg;
 	uint8_t *buffer;
 	size_t buffer_length;
@@ -66,6 +73,10 @@ struct uart_stm32_data {
 	struct uart_dma_stream dma_tx;
 	uint8_t *rx_next_buffer;
 	size_t rx_next_buffer_len;
+#if CONFIG_UART_STM32_UNALIGNED_DMA
+	uint8_t *dma_rx_buffer;
+	size_t dma_rx_buffer_len;
+#endif /* CONFIG_UART_STM32_UNALIGNED_DMA */
 #endif
 #ifdef CONFIG_PM_DEVICE
 	uint32_t pm_state;
