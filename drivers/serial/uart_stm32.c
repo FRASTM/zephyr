@@ -52,6 +52,16 @@ LOG_MODULE_REGISTER(uart_stm32);
 
 #define TIMEOUT 1000
 
+#if CONFIG_NOCACHE_MEMORY
+#define DCACHE_INVALIDATE(addr, size) \
+	SCB_InvalidateDCache_by_Addr((uint32_t *)addr, size)
+#define DCACHE_CLEAN(addr, size) \
+	SCB_CleanDCache_by_Addr((uint32_t *)addr, size)
+#else
+#define DCACHE_INVALIDATE(addr, size) {; }
+#define DCACHE_CLEAN(addr, size) {; }
+#endif
+
 static inline void uart_stm32_set_baudrate(const struct device *dev,
 					   uint32_t baud_rate)
 {
@@ -773,6 +783,9 @@ static void uart_stm32_dma_rx_flush(const struct device *dev)
 	struct dma_status stat;
 	struct uart_stm32_data *data = DEV_DATA(dev);
 
+	/* Assure cache coherency after DMA write operation */
+	DCACHE_INVALIDATE(data->dma_rx.buffer, data->dma_rx.buffer_length);
+
 	if (dma_get_status(data->dma_rx.dma_dev,
 				data->dma_rx.dma_channel, &stat) == 0) {
 		size_t rx_rcv_len = data->dma_rx.buffer_length -
@@ -925,6 +938,9 @@ void uart_stm32_dma_tx_cb(const struct device *dma_dev, void *user_data,
 
 	(void)k_work_cancel_delayable(&data->dma_tx.timeout_work);
 
+	/* Assure cache coherency before DMA read operation */
+	DCACHE_CLEAN(data->dma_tx.buffer, data->dma_tx.buffer_length);
+
 	if (!dma_get_status(data->dma_tx.dma_dev,
 				data->dma_tx.dma_channel, &stat)) {
 		data->dma_tx.counter = data->dma_tx.buffer_length -
@@ -984,6 +1000,9 @@ void uart_stm32_dma_rx_cb(const struct device *dma_dev, void *user_data,
 	/* true since this functions occurs when buffer if full */
 	data->dma_rx.counter = data->dma_rx.buffer_length;
 
+	/* Assure cache coherency after DMA write operation */
+	DCACHE_INVALIDATE(data->dma_rx.buffer, data->dma_rx.buffer_length);
+
 	async_evt_rx_rdy(data);
 
 	if (data->rx_next_buffer != NULL) {
@@ -1019,6 +1038,9 @@ static int uart_stm32_async_tx(const struct device *dev,
 	if (data->dma_tx.buffer_length != 0) {
 		return -EBUSY;
 	}
+
+	/* Assure cache coherency before DMA read operation */
+	DCACHE_CLEAN(tx_data, buf_size);
 
 	data->dma_tx.buffer = (uint8_t *)tx_data;
 	data->dma_tx.buffer_length = buf_size;
