@@ -9,3 +9,7 @@
 &dma2 {
 	status = "okay";
 };
+
+&sram2 {
+	status = "okay";
+};
