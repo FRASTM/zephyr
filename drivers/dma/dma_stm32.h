@@ -88,6 +88,14 @@ void stm32_dma_config_channel_function(DMA_TypeDef *dma, uint32_t id,
 						uint32_t slot);
 #endif
 
+void stm32_dma_set_mem_periph_address(DMA_TypeDef *dma,
+				      uint32_t channel,
+				      uint32_t src_addr,
+				      uint32_t dest_addr);
+void stm32_dma_set_periph_mem_address(DMA_TypeDef *dma,
+				      uint32_t channel,
+				      uint32_t src_addr,
+				      uint32_t dest_addr);
 #ifdef CONFIG_DMA_STM32_V1
 void stm32_dma_disable_fifo_irq(DMA_TypeDef *dma, uint32_t id);
 bool stm32_dma_check_fifo_mburst(LL_DMA_InitTypeDef *DMAx);
@@ -95,6 +103,12 @@ uint32_t stm32_dma_get_fifo_threshold(uint16_t fifo_mode_control);
 uint32_t stm32_dma_get_mburst(struct dma_config *config, bool source_periph);
 uint32_t stm32_dma_get_pburst(struct dma_config *config, bool source_periph);
 #endif
+
+#if defined(CONFIG_SOC_SERIES_STM32U5X)
+/* LL function name differs in the stm32u5xx_ll_dma.h */
+#define LL_DMA_SetDataLength LL_DMA_SetBlkDataLength
+#define LL_DMA_GetDataLength LL_DMA_GetBlkDataLength
+#endif /* CONFIG_SOC_SERIES_STM32U5X */
 
 #ifdef CONFIG_DMAMUX_STM32
 /* dma_stm32_ api functions are exported to the dmamux_stm32 */

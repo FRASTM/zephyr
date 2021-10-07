@@ -301,3 +301,21 @@ int stm32_dma_disable_stream(DMA_TypeDef *dma, uint32_t id)
 
 	return -EAGAIN;
 }
+
+void stm32_dma_set_mem_periph_address(DMA_TypeDef *dma,
+					     uint32_t channel,
+					     uint32_t src_addr,
+					     uint32_t dest_addr)
+{
+	LL_DMA_SetMemoryAddress(dma, channel, src_addr);
+	LL_DMA_SetPeriphAddress(dma, channel, dest_addr);
+}
+
+void stm32_dma_set_periph_mem_address(DMA_TypeDef *dma,
+					     uint32_t channel,
+					     uint32_t src_addr,
+					     uint32_t dest_addr)
+{
+	LL_DMA_SetPeriphAddress(dma, channel, src_addr);
+	LL_DMA_SetMemoryAddress(dma, channel, dest_addr);
+}
