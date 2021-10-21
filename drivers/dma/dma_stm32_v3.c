@@ -117,6 +117,11 @@ static inline bool stm32_dma_is_te_irq_active(DMA_TypeDef *dma, uint32_t id)
 void stm32_dma_clear_stream_irq(DMA_TypeDef *dma, uint32_t id)
 {
 	dma_stm32_clear_te(dma, id);
+
+	LL_DMA_ClearFlag_TO(dma, dma_stm32_id_to_stream(id));
+	LL_DMA_ClearFlag_SUSP(dma, dma_stm32_id_to_stream(id));
+	LL_DMA_ClearFlag_HT(dma, dma_stm32_id_to_stream(id));
+	LL_DMA_ClearFlag_TC(dma, dma_stm32_id_to_stream(id));
 }
 
 bool stm32_dma_is_irq_happened(DMA_TypeDef *dma, uint32_t id)
@@ -137,6 +142,7 @@ bool stm32_dma_is_unexpected_irq_happened(DMA_TypeDef *dma, uint32_t id)
 void stm32_dma_enable_stream(DMA_TypeDef *dma, uint32_t id)
 {
 	LL_DMA_EnableChannel(dma, dma_stm32_id_to_stream(id));
+
 }
 
 int stm32_dma_disable_stream(DMA_TypeDef *dma, uint32_t id)
