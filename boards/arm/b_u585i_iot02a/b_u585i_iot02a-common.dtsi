@@ -101,6 +101,47 @@
 	status = "okay";
 };
 
+&octospi2 {
+	pinctrl-0 = <&octospi2_clk_pf4 &octospi2_ncs_pi5
+		     &octospi2_io0_pf0 &octospi2_io1_pf1
+		     &octospi2_io2_pf2 &octospi2_io3_pf3
+		     &octospi2_io4_ph9 &octospi2_io5_ph10
+		     &octospi2_io6_ph11 &octospi2_io7_ph12
+		     &octospi2_dqs_pf12>;
+	pinctrl-names = "default";
+
+	status = "okay";
+
+	mx25lm51245: ospi-nor-flash@0 {
+		compatible = "st,stm32-ospi-nor";
+		label = "MX25LM51245";
+		reg = <0>;
+		ospi-max-frequency = <50000000>;
+		size = <DT_SIZE_M(4)>;  /* 512 KBytes */
+		spi-bus-width = <1>;
+		data-rate = <1>;
+		status = "okay";
+		sfdp-bfp = [
+			53 46 44 50 06 01 02 ff
+			00 06 01 10 30 00 00 ff
+			C2 00 01 04 10 01 00 ff
+			84 00 01 02 C0 00 00 ff
+			00 00 00 00
+		];
+
+		partitions {
+			   compatible = "fixed-partitions";
+			   #address-cells = <1>;
+			   #size-cells = <1>;
+
+			   partition@0 {
+			       label = "nor";
+			       reg = <0x00000000 0x00400000>;
+			   };
+		};
+	};
+};
+
 &i2c1 {
 	pinctrl-0 = <&i2c1_scl_pb8 &i2c1_sda_pb9>;
 	pinctrl-names = "default";
