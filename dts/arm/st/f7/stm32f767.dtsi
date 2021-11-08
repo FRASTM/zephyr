@@ -7,13 +7,19 @@
 #include <st/f7/stm32f7.dtsi>
 
 / {
-	/* 128KB DTCM @ 20000000, 368KB SRAM1 @ 20020000,
+	/* 128KB DTCM @ 20000000,
+	 * 368KB SRAM1 @ 20020000,
 	 * 16KB SRAM2 @ 2007C000
 	 */
 
 	sram0: memory@20020000 {
 		compatible = "mmio-sram";
-		reg = <0x20020000 DT_SIZE_K(384)>;
+		reg = <0x20020000 DT_SIZE_K(368)>;
+	};
+
+	sram2: memory@2007c000 {
+		compatible = "mmio-sram";
+		reg = <0x2007c000 DT_SIZE_K(16)>;
 	};
 
 	dtcm: memory@20000000 {
