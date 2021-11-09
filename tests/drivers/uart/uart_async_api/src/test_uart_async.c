@@ -77,9 +77,9 @@ void test_single_read(void)
 	const uint8_t TX_BUF[] = "test";
 
 	static __aligned(32) uint8_t tx_buf[5] __used
-		__attribute__((__section__(".nocache_user")));
+		__attribute__((__section__(".sram_dma")));
 	static __aligned(32) uint8_t rx_buf[10] __used
-		__attribute__((__section__(".nocache_user")));
+		__attribute__((__section__(".sram_dma")));
 
 	memset(tx_buf, 0, sizeof(tx_buf));
 	memcpy(tx_buf, TX_BUF, sizeof(tx_buf));
@@ -123,11 +123,11 @@ void test_single_read(void)
 
 #if CONFIG_NOCACHE_MEMORY
 static __aligned(32) uint8_t chained_read_buf0[10] __used
-	__attribute__((__section__(".nocache_user")));
+	__attribute__((__section__(".sram_dma")));
 static __aligned(32) uint8_t chained_read_buf1[20] __used
-	__attribute__((__section__(".nocache_user")));
+	__attribute__((__section__(".sram_dma")));
 static __aligned(32) uint8_t chained_read_buf2[30] __used
-	__attribute__((__section__(".nocache_user")));
+	__attribute__((__section__(".sram_dma")));
 #else
 /* this src memory shall be in RAM to support using as a DMA source pointer.*/
 ZTEST_BMEM uint8_t chained_read_buf0[10];
@@ -182,7 +182,7 @@ void test_chained_read(void)
 {
 #if CONFIG_NOCACHE_MEMORY
 	static __aligned(32) uint8_t tx_buf[10] __used
-		__attribute__((__section__(".nocache_user")));
+		__attribute__((__section__(".sram_dma")));
 
 	memset(tx_buf, 0, sizeof(tx_buf));
 #else
@@ -214,7 +214,7 @@ void test_chained_read(void)
 }
 #if CONFIG_NOCACHE_MEMORY
 static __aligned(32) uint8_t double_buffer[2][12] __used
-	__attribute__((__section__(".nocache_user")));
+	__attribute__((__section__(".sram_dma")));
 static uint8_t *next_buf = double_buffer[1];
 #else
 ZTEST_BMEM uint8_t double_buffer[2][12];
@@ -257,7 +257,7 @@ void test_double_buffer(void)
 {
 #if CONFIG_NOCACHE_MEMORY
 static __aligned(32) uint8_t tx_buf[4] __used
-	__attribute__((__section__(".nocache_user")));
+	__attribute__((__section__(".sram_dma")));
 #else
 	uint8_t tx_buf[4];
 #endif
@@ -329,9 +329,9 @@ void test_read_abort(void)
 {
 #if CONFIG_NOCACHE_MEMORY
 	static __aligned(32) uint8_t tx_buf[100] __used
-		__attribute__((__section__(".nocache_user")));
+		__attribute__((__section__(".sram_dma")));
 	static __aligned(32) uint8_t rx_buf[100] __used
-		__attribute__((__section__(".nocache_user")));
+		__attribute__((__section__(".sram_dma")));
 #else
 	uint8_t rx_buf[100];
 	uint8_t tx_buf[100];
@@ -410,9 +410,9 @@ void test_write_abort(void)
 {
 #if CONFIG_NOCACHE_MEMORY
 	static __aligned(32) uint8_t tx_buf[100] __used
-		__attribute__((__section__(".nocache_user")));
+		__attribute__((__section__(".sram_dma")));
 	static __aligned(32) uint8_t rx_buf[100] __used
-		__attribute__((__section__(".nocache_user")));
+		__attribute__((__section__(".sram_dma")));
 #else
 	uint8_t rx_buf[100];
 	uint8_t tx_buf[100];
@@ -484,9 +484,9 @@ void test_forever_timeout(void)
 {
 #if CONFIG_NOCACHE_MEMORY
 	static __aligned(32) uint8_t tx_buf[100] __used
-		__attribute__((__section__(".nocache_user")));
+		__attribute__((__section__(".sram_dma")));
 	static __aligned(32) uint8_t rx_buf[100] __used
-		__attribute__((__section__(".nocache_user")));
+		__attribute__((__section__(".sram_dma")));
 #else
 	uint8_t rx_buf[100];
 	uint8_t tx_buf[100];
@@ -528,7 +528,7 @@ ZTEST_BMEM volatile uint8_t tx_sent;
 static const uint8_t TX_DATA0[] = "Message 1";
 static const uint8_t TX_DATA1[] = "Message 2";
 static __aligned(32) uint8_t chained_write_tx_bufs[2][10] __used
-	__attribute__((__section__(".nocache_user")));
+	__attribute__((__section__(".sram_dma")));
 #else
 ZTEST_DMEM uint8_t chained_write_tx_bufs[2][10] = {"Message 1", "Message 2"};
 #endif
@@ -573,7 +573,7 @@ void test_chained_write(void)
 {
 #if CONFIG_NOCACHE_MEMORY
 	static __aligned(32) uint8_t rx_buf[20] __used
-		__attribute__((__section__(".nocache_user")));
+		__attribute__((__section__(".sram_dma")));
 
 	memset(chained_write_tx_bufs[0], 0, sizeof(chained_write_tx_bufs[0]));
 	memcpy(chained_write_tx_bufs[0], TX_DATA0, sizeof(TX_DATA0));
@@ -608,11 +608,11 @@ void test_chained_write(void)
 }
 #if CONFIG_NOCACHE_MEMORY
 static __aligned(32) uint8_t long_rx_buf[1024] __used
-	__attribute__((__section__(".nocache_user")));
+	__attribute__((__section__(".sram_dma")));
 static __aligned(32) uint8_t long_rx_buf2[1024] __used
-	__attribute__((__section__(".nocache_user")));
+	__attribute__((__section__(".sram_dma")));
 static __aligned(32) uint8_t long_tx_buf[1000] __used
-	__attribute__((__section__(".nocache_user")));
+	__attribute__((__section__(".sram_dma")));
 #else
 ZTEST_BMEM uint8_t long_rx_buf[1024];
 ZTEST_BMEM uint8_t long_rx_buf2[1024];
