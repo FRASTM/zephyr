@@ -121,7 +121,11 @@ static int spi_stm32_dma_tx_load(const struct device *dev, const uint8_t *buf,
 		}
 	}
 
+#if defined(CONFIG_SOC_SERIES_STM32H7X)
+	blk_cfg->dest_address = (uint32_t)LL_SPI_DMA_GetTxRegAddr(cfg->spi);
+#else
 	blk_cfg->dest_address = (uint32_t)LL_SPI_DMA_GetRegAddr(cfg->spi);
+#endif /* CONFIG_SOC_SERIES_STM32H7X */
 	/* fifo mode NOT USED there */
 	if (data->dma_tx.dst_addr_increment) {
 		blk_cfg->dest_addr_adj = DMA_ADDR_ADJ_INCREMENT;
@@ -180,7 +184,11 @@ static int spi_stm32_dma_rx_load(const struct device *dev, uint8_t *buf,
 		}
 	}
 
-	blk_cfg->source_address = (uint32_t)LL_SPI_DMA_GetRegAddr(cfg->spi);
+#if defined(CONFIG_SOC_SERIES_STM32H7X)
+	blk_cfg->source_address = (uint32_t)LL_SPI_DMA_GetRxRegAddr(cfg->spi);
+#else
+	blk_cfg->dest_address = (uint32_t)LL_SPI_DMA_GetRegAddr(cfg->spi);
+#endif /* CONFIG_SOC_SERIES_STM32H7X */
 	if (data->dma_rx.src_addr_increment) {
 		blk_cfg->source_addr_adj = DMA_ADDR_ADJ_INCREMENT;
 	} else {
