@@ -148,6 +148,9 @@ static int spi_complete_multiple(const struct device *dev,
 	int ret;
 
 	LOG_INF("Start complete multiple");
+	
+	(void)memset(buffer_rx, 0, BUF_SIZE);
+	(void)memset(buffer2_rx, 0, BUF2_SIZE);
 
 	ret = spi_transceive(dev, spi_conf, &tx, &rx);
 	if (ret) {
@@ -210,6 +213,8 @@ static int spi_complete_loop(const struct device *dev,
 	int ret;
 
 	LOG_INF("Start complete loop");
+
+	(void)memset(buffer_rx, 0, BUF_SIZE);
 
 	ret = spi_transceive(dev, spi_conf, &tx, &rx);
 	if (ret) {
