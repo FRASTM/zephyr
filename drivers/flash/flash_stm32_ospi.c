@@ -129,6 +129,36 @@ static int ospi_send_cmd(const struct device *dev, OSPI_RegularCmdTypeDef *cmd)
 }
 
 /*
+ * Perform a read access over OSPI bus for SDFP (DataMode is already set)
+ */
+static int ospi_read_access_sdfp(const struct device *dev, OSPI_RegularCmdTypeDef *cmd,
+			    uint8_t *data, size_t size)
+{
+	const struct flash_stm32_ospi_config *dev_cfg = DEV_CFG(dev);
+	struct flash_stm32_ospi_data *dev_data = DEV_DATA(dev);
+	HAL_StatusTypeDef hal_ret;
+
+	ARG_UNUSED(dev_cfg);
+
+	cmd->NbData = size;
+
+	dev_data->cmd_status = 0;
+
+	hal_ret = HAL_OSPI_Command(&dev_data->hospi, cmd,
+				HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
+	if (hal_ret != HAL_OK) {
+		LOG_ERR("%d: Failed to send OSPI instruction", hal_ret);
+	}
+
+	hal_ret = HAL_OSPI_Receive(&dev_data->hospi, data, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
+	if (hal_ret != HAL_OK) {
+		LOG_ERR("%d: Failed to read data", hal_ret);
+	}
+
+	return dev_data->cmd_status;
+}
+
+/*
  * Perform a read access over OSPI bus.
  */
 static int ospi_read_access(const struct device *dev, OSPI_RegularCmdTypeDef *cmd,
@@ -205,31 +235,25 @@ static int ospi_write_access(const struct device *dev, OSPI_RegularCmdTypeDef *c
 	return dev_data->cmd_status;
 }
 
+
 /*
- * Read Serial Flash Discovery Parameter
+ * Read Serial Flash ID Parameter
  */
-static int ospi_read_sfdp(const struct device *dev, off_t addr, uint8_t *data,
+static int ospi_read_norid(const struct device *dev, uint8_t *data,
 			  size_t size)
 {
 	struct flash_stm32_ospi_data *dev_data = DEV_DATA(dev);
 	HAL_StatusTypeDef hal_ret;
 
 	OSPI_RegularCmdTypeDef cmd = {
-		.Instruction = JESD216_CMD_READ_SFDP,
-		.Address = addr,
-		.AddressSize = HAL_OSPI_ADDRESS_24_BITS,
+		.Instruction = 0x9F,
 		.DummyCycles = 8,
 		.InstructionMode    = HAL_OSPI_INSTRUCTION_1_LINE,
-		.AddressMode        = HAL_OSPI_ADDRESS_1_LINE,
+		.InstructionSize    = HAL_OSPI_INSTRUCTION_8_BITS,
 		.OperationType      = HAL_OSPI_OPTYPE_COMMON_CFG,
 		.FlashId            = HAL_OSPI_FLASH_ID_1,
-//		.InstructionSize    = HAL_OSPI_INSTRUCTION_8_BITS,
-		.InstructionDtrMode = HAL_OSPI_INSTRUCTION_DTR_DISABLE,
-		.AddressDtrMode     = HAL_OSPI_ADDRESS_DTR_DISABLE,
 		.DataMode           = HAL_OSPI_DATA_1_LINE,
-		.DQSMode            = HAL_OSPI_DQS_DISABLE,
-		.AlternateBytesMode = HAL_OSPI_ALTERNATE_BYTES_NONE,
-		.DataDtrMode        = HAL_OSPI_DATA_DTR_DISABLE,
+		.AddressMode        = HAL_OSPI_ADDRESS_NONE,
 		.SIOOMode           = HAL_OSPI_SIOO_INST_EVERY_CMD,
 		.NbData = size,
 	};
@@ -249,6 +273,27 @@ static int ospi_read_sfdp(const struct device *dev, off_t addr, uint8_t *data,
 	}
 
 	return dev_data->cmd_status;
+}
+
+/*
+ * Read Serial Flash Discovery Parameter
+ */
+static int ospi_read_sfdp(const struct device *dev, off_t addr, uint8_t *data,
+			  size_t size)
+{
+	OSPI_RegularCmdTypeDef cmd = {
+		.Instruction = JESD216_CMD_READ_SFDP,
+		.Address = addr,
+		.AddressSize = HAL_OSPI_ADDRESS_24_BITS,
+		.AddressMode = HAL_OSPI_ADDRESS_1_LINE,
+		.DummyCycles = 8,
+		.InstructionMode = HAL_OSPI_INSTRUCTION_1_LINE,
+		.InstructionSize = HAL_OSPI_INSTRUCTION_8_BITS,
+		.DataMode = HAL_OSPI_DATA_1_LINE,
+		.SIOOMode = HAL_OSPI_SIOO_INST_EVERY_CMD,
+	};
+
+	return ospi_read_access_sdfp(dev, &cmd, data, size);
 }
 
 static bool ospi_address_is_valid(const struct device *dev, off_t addr,
@@ -839,7 +884,6 @@ static int flash_stm32_ospi_init(const struct device *dev)
 	}
 
 	/* Initializes the independent peripherals clock */
-//	__HAL_RCC_OSPI_CONFIG(RCC_OSPICLKSOURCE_PLL1); /* PLL1 is the clock source */
 	__HAL_RCC_OSPI_CONFIG(RCC_OSPICLKSOURCE_SYSCLK); /* */
 
 #if STM32_OSPI_USE_DMA
@@ -930,21 +974,20 @@ static int flash_stm32_ospi_init(const struct device *dev)
 	__ASSERT_NO_MSG(prescaler <= STM32_OSPI_CLOCK_PRESCALER_MAX);
 
 	/* Initialize OSPI HAL structure completely */
-//	dev_data->hospi.Init.ClockPrescaler = prescaler;
-	dev_data->hospi.Init.ClockPrescaler = 4;
-	dev_data->hospi.Init.DeviceSize = find_lsb_set(dev_cfg->flash_size);
+	dev_data->hospi.Init.FifoThreshold = 4;
+	dev_data->hospi.Init.ClockPrescaler = prescaler;
+	dev_data->hospi.Init.DeviceSize = 26;
+//	dev_data->hospi.Init.DeviceSize = find_lsb_set(dev_cfg->flash_size);
 	dev_data->hospi.Init.DualQuad = HAL_OSPI_DUALQUAD_DISABLE;
-	dev_data->hospi.Init.MemoryType = HAL_OSPI_MEMTYPE_MACRONIX;
-	dev_data->hospi.Init.ChipSelectHighTime = 3;
+	dev_data->hospi.Init.MemoryType = HAL_OSPI_MEMTYPE_MICRON;
+	dev_data->hospi.Init.ChipSelectHighTime = 2;
 	dev_data->hospi.Init.FreeRunningClock = HAL_OSPI_FREERUNCLK_DISABLE;
 	dev_data->hospi.Init.ClockMode = HAL_OSPI_CLOCK_MODE_0;
 	dev_data->hospi.Init.WrapSize = HAL_OSPI_WRAP_NOT_SUPPORTED;
 	dev_data->hospi.Init.SampleShifting = HAL_OSPI_SAMPLE_SHIFTING_NONE;
-	dev_data->hospi.Init.DelayHoldQuarterCycle = HAL_OSPI_DHQC_ENABLE;
+	dev_data->hospi.Init.DelayHoldQuarterCycle = HAL_OSPI_DHQC_DISABLE;
 	dev_data->hospi.Init.ChipSelectBoundary = 0;
 	dev_data->hospi.Init.DelayBlockBypass = HAL_OSPI_DELAY_BLOCK_USED;
-//	dev_data->hospi.Init.DelayBlockBypass = HAL_OSPI_DELAY_BLOCK_BYPASSED;
-//	dev_data->hospi.Init.MaxTran = 0;
 	dev_data->hospi.Init.Refresh = 0;
 	if (HAL_OSPI_Init(&dev_data->hospi) != HAL_OK) {
 		LOG_ERR("OSPI Init failed");
@@ -977,6 +1020,7 @@ static int flash_stm32_ospi_init(const struct device *dev)
 		LOG_ERR("OSPI M config failed");
 		return -EIO;
 	}
+printk("OSPI M init'd\n");
 	/* OCTOSPI2 delay block init Function */
 	HAL_OSPI_DLYB_CfgTypeDef ospi_delay_block_cfg = {0};
 
@@ -986,11 +1030,16 @@ static int flash_stm32_ospi_init(const struct device *dev)
 		LOG_ERR("OSPI DelayBlock failed");
 		return -EIO;
 	}
+printk("OSPI delay block init'd\n");
 #endif /* CONFIG_SOC_SERIES_STM32U5X */
-	/* Configure the memory in octal mode */
-	if (flash_stm32_ospi_DTR_config(&dev_data->hospi) != 0) {
-		LOG_ERR("OSPI octal mode cfg failed");
-		return -EIO;
+
+	/* send the instruction to read the NOR-flash ID : check access to mem. */
+	uint8_t nor_id[3];
+
+	ret = ospi_read_norid(dev, nor_id, sizeof(nor_id));
+	if (ret != 0) {
+		LOG_ERR("reading Nor-flash ID failed: %d", ret);
+		return ret;
 	}
 
 	/* Initialize semaphores */
@@ -1000,7 +1049,7 @@ static int flash_stm32_ospi_init(const struct device *dev)
 	/* Run IRQ init */
 	dev_cfg->irq_config(dev);
 
-	/* Run NOR init */
+	/* send the instruction to read the SFDP  */
 	const uint8_t decl_nph = 2;
 	union {
 		/* We only process BFP so use one parameter block */
@@ -1018,8 +1067,10 @@ static int flash_stm32_ospi_init(const struct device *dev)
 	uint32_t magic = jesd216_sfdp_magic(hp);
 
 	if (magic != JESD216_SFDP_MAGIC) {
-		LOG_ERR("SFDP magic %08x invalid", magic);
-		return -EINVAL;
+		/* this is not and error, continue */
+		LOG_INF("SFDP magic not supported");
+		dev_data->page_size = 0x1000; /* 4K erase page size */
+		goto run_nor_init;
 	}
 
 	LOG_INF("%s: SFDP v %u.%u AP %x with %u PH", dev->name,
@@ -1056,6 +1107,14 @@ static int flash_stm32_ospi_init(const struct device *dev)
 			}
 		}
 		++php;
+	}
+
+run_nor_init:
+
+	/* Configure the memory in octal mode */
+	if (flash_stm32_ospi_DTR_config(&dev_data->hospi) != 0) {
+		LOG_ERR("OSPI octal mode cfg failed");
+		return -EIO;
 	}
 
 #if defined(CONFIG_FLASH_PAGE_LAYOUT)
