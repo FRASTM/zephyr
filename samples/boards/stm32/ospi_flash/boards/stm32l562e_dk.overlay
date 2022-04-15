@@ -1,0 +1,45 @@
+/*
+ * Copyright (c) 2022 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	chosen {
+		zephyr,flash-controller = &flash0;
+	};
+};
+
+&octospi1 {
+	pinctrl-0 = <&octospi1_clk_pa3 &octospi1_ncs_pa2
+		     &octospi1_io0_pb1 &octospi1_io1_pb0
+		     &octospi1_io2_pa7 &octospi2_io3_pa6
+		     &octospi1_io4_pc1 &octospi1_io5_pc2
+		     &octospi1_io6_pc3 &octospi1_io7_pc0>;
+	pinctrl-names = "default";
+
+	status = "okay";
+
+	mx25lm51245: ospi-nor-flash@0 {
+		compatible = "st,stm32-ospi-nor";
+		label = "MX25LM51245";
+		reg = <0>;
+		ospi-max-frequency = <50000000>;
+		size = <DT_SIZE_M(4)>;  /* 512 KBytes */
+/*		reset-gpios = <&gpiog 2 GPIO_ACTIVE_LOW>;
+		reset-gpios-duration = <1>;*/
+		data-mode = <8>;
+		status = "okay";
+
+		partitions {
+			   compatible = "fixed-partitions";
+			   #address-cells = <1>;
+			   #size-cells = <1>;
+
+			   partition@0 {
+			       label = "nor";
+			       reg = <0x00000000 0x00400000>;
+			   };
+		};
+	};
+};
