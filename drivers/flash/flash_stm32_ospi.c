@@ -14,7 +14,7 @@
 #include <arch/common/ffs.h>
 #include <sys/util.h>
 #include <soc.h>
-#include <pinmux/pinmux_stm32.h>
+#include <drivers/pinctrl.h>
 #include <drivers/clock_control/stm32_clock_control.h>
 #include <drivers/clock_control.h>
 #include <drivers/flash.h>
@@ -29,12 +29,10 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(flash_stm32_ospi, CONFIG_FLASH_LOG_LEVEL);
 
-#define STM32_OSPI_FIFO_THRESHOLD         8
+#define STM32_OSPI_FIFO_THRESHOLD         4
 #define STM32_OSPI_CLOCK_PRESCALER_MAX  255
 
 #define STM32_OSPI_USE_DMA DT_NODE_HAS_PROP(DT_PARENT(DT_DRV_INST(0)), dmas)
-
-#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32_ospi_nor)
 
 #if  DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dma)
 	LL_DMA_MDATAALIGN_BYTE,
@@ -66,8 +64,7 @@ struct flash_stm32_ospi_config {
 	size_t flash_size;
 	uint32_t max_frequency;
 	int data_mode;
-	const struct soc_gpio_pinctrl *pinctrl_list;
-	size_t pinctrl_list_size;
+	const struct pinctrl_dev_config *pcfg;
 };
 
 struct flash_stm32_ospi_data {
@@ -147,6 +144,7 @@ static int ospi_read_access(const struct device *dev, OSPI_RegularCmdTypeDef *cm
 	dev_data->cmd_status = 0;
 
 	hal_ret = HAL_OSPI_Command_IT(&dev_data->hospi, cmd);
+	hal_ret = HAL_OSPI_Command(&dev_data->hospi, cmd, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
 	if (hal_ret != HAL_OK) {
 		LOG_ERR("%d: Failed to send OSPI instruction", hal_ret);
 		return -EIO;
@@ -213,28 +211,44 @@ static int ospi_write_access(const struct device *dev, OSPI_RegularCmdTypeDef *c
 static int ospi_read_sfdp(const struct device *dev, off_t addr, uint8_t *data,
 			  size_t size)
 {
+	struct flash_stm32_ospi_data *dev_data = DEV_DATA(dev);
+	HAL_StatusTypeDef hal_ret;
+
 	OSPI_RegularCmdTypeDef cmd = {
 		.Instruction = JESD216_CMD_READ_SFDP,
 		.Address = addr,
-		.AddressSize = HAL_OSPI_ADDRESS_32_BITS,
-		.DummyCycles = 20,
-//		.InstructionMode = HAL_OSPI_INSTRUCTION_1_LINE,
-		.InstructionMode    = HAL_OSPI_INSTRUCTION_8_LINES,
-//		.AddressMode = HAL_OSPI_ADDRESS_1_LINE,
-		.AddressMode        = HAL_OSPI_ADDRESS_8_LINES,
+		.AddressSize = HAL_OSPI_ADDRESS_24_BITS,
+		.DummyCycles = 8,
+		.InstructionMode    = HAL_OSPI_INSTRUCTION_1_LINE,
+		.AddressMode        = HAL_OSPI_ADDRESS_1_LINE,
 		.OperationType      = HAL_OSPI_OPTYPE_COMMON_CFG,
-  		.FlashId            = HAL_OSPI_FLASH_ID_1,
-		.InstructionSize    = HAL_OSPI_INSTRUCTION_16_BITS,
-		.InstructionDtrMode = HAL_OSPI_INSTRUCTION_DTR_ENABLE,
-		.AddressDtrMode     = HAL_OSPI_ADDRESS_DTR_ENABLE,
-		.DataMode           = HAL_OSPI_DATA_NONE,
+		.FlashId            = HAL_OSPI_FLASH_ID_1,
+//		.InstructionSize    = HAL_OSPI_INSTRUCTION_8_BITS,
+		.InstructionDtrMode = HAL_OSPI_INSTRUCTION_DTR_DISABLE,
+		.AddressDtrMode     = HAL_OSPI_ADDRESS_DTR_DISABLE,
+		.DataMode           = HAL_OSPI_DATA_1_LINE,
 		.DQSMode            = HAL_OSPI_DQS_DISABLE,
 		.AlternateBytesMode = HAL_OSPI_ALTERNATE_BYTES_NONE,
-		.DataDtrMode        = HAL_OSPI_DATA_DTR_ENABLE,
+		.DataDtrMode        = HAL_OSPI_DATA_DTR_DISABLE,
 		.SIOOMode           = HAL_OSPI_SIOO_INST_EVERY_CMD,
+		.NbData = size,
 	};
+	dev_data->cmd_status = 0;
 
-	return ospi_read_access(dev, &cmd, data, size);
+	/* do not use command IT here */
+	hal_ret = HAL_OSPI_Command(&dev_data->hospi, &cmd, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
+	if (hal_ret != HAL_OK) {
+		LOG_ERR("%d: Failed to send OSPI instruction", hal_ret);
+		return -EIO;
+	}
+	/* do not use receive IT here */
+	hal_ret = HAL_OSPI_Receive(&dev_data->hospi, data, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
+	if (hal_ret != HAL_OK) {
+		LOG_ERR("%d: Failed to read SFDP", hal_ret);
+		return -EIO;
+	}
+
+	return dev_data->cmd_status;
 }
 
 static bool ospi_address_is_valid(const struct device *dev, off_t addr,
@@ -376,6 +390,7 @@ static int flash_stm32_ospi_erase(const struct device *dev, off_t addr,
 		.Instruction = SPI_NOR_CMD_WREN,
 		.InstructionMode = HAL_OSPI_INSTRUCTION_1_LINE,
 		.DataMode = dev_cfg->data_mode,
+		.FlashId = HAL_OSPI_FLASH_ID_1,
 	};
 
 	OSPI_RegularCmdTypeDef cmd_erase = {
@@ -657,82 +672,154 @@ static int spi_nor_process_bfp(const struct device *dev,
 	return 0;
 }
 
-/* to configure the ospi memory in DTR octal mode during the init */
-static int flash_stm32_ospi_dtr_mode_config(OSPI_HandleTypeDef *hospi)
+/* This function Configures Automatic-polling mode to wait until WIP=0 */
+static int flash_stm32_ospi_autoPolling_WIP(OSPI_HandleTypeDef *hospi)
 {
-	uint8_t reg;
-	OSPI_RegularCmdTypeDef  ospi_command;
-	OSPI_AutoPollingTypeDef ospi_cfg;
+	OSPI_RegularCmdTypeDef sCommand;
+	OSPI_AutoPollingTypeDef sConfig;
+	/* Initialize Automatic-Polling mode to wait until WIP=0 */
+	sCommand.OperationType = HAL_OSPI_OPTYPE_COMMON_CFG;
+	sCommand.FlashId = HAL_OSPI_FLASH_ID_1;
+	sCommand.Instruction = SPI_NOR_OCMD_RDSR;
+	sCommand.InstructionMode = HAL_OSPI_INSTRUCTION_1_LINE;
+	sCommand.InstructionSize = HAL_OSPI_INSTRUCTION_8_BITS;
+	sCommand.InstructionDtrMode = HAL_OSPI_INSTRUCTION_DTR_DISABLE;
+	sCommand.AddressMode = HAL_OSPI_ADDRESS_NONE;
+	sCommand.AlternateBytesMode = HAL_OSPI_ALTERNATE_BYTES_NONE;
+	sCommand.DummyCycles = 0;
+	sCommand.DQSMode = HAL_OSPI_DQS_DISABLE;
+	sCommand.SIOOMode = HAL_OSPI_SIOO_INST_EVERY_CMD;
+	sCommand.DataMode = HAL_OSPI_DATA_1_LINE;
+	sCommand.NbData = 1;
+	sCommand.DataDtrMode = HAL_OSPI_DATA_DTR_DISABLE;
+	/* Set the mask to 0x01 to mask all Status REG bits except WIP */
+	/* Set the match to 0x00 to check if the WIP bit is Reset */
+	sConfig.Match = SPI_NOR_MEM_RDY_MATCH;
+	sConfig.Mask = SPI_NOR_MEM_RDY_MASK;
+	sConfig.MatchMode = HAL_OSPI_MATCH_MODE_AND;
+	sConfig.Interval = SPI_NOR_AUTO_POLLING_INTERVAL;
+	sConfig.AutomaticStop = HAL_OSPI_AUTOMATIC_STOP_ENABLE;
+	if (HAL_OSPI_Command(hospi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
+			LOG_ERR("OSPI Write Enable command failed");
+			return -EIO;
+		}
+
+	/* Start Automatic-Polling mode to wait until the memory is ready WIP=0 */
+	if (HAL_OSPI_AutoPolling(hospi, &sConfig, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
+			LOG_ERR("OSPI Write Enable command failed");
+			return -EIO;
+		}
+	return 0;
+}
+
+/* Enables writing to the memory: write enable cmd is sent in single SPI mode */
+static int flash_stm32_ospi_write_enable(OSPI_HandleTypeDef *hospi)
+{
+	OSPI_RegularCmdTypeDef sCommand;
+	OSPI_AutoPollingTypeDef sConfig;
+	/* Initialize the Write Enable cmd in single SPI mode */
+	sCommand.OperationType = HAL_OSPI_OPTYPE_COMMON_CFG;
+	sCommand.FlashId = HAL_OSPI_FLASH_ID_1;
+	sCommand.Instruction = SPI_NOR_CMD_WREN;
+	sCommand.InstructionMode = HAL_OSPI_INSTRUCTION_1_LINE;
+	sCommand.InstructionSize = HAL_OSPI_INSTRUCTION_8_BITS;
+	sCommand.InstructionDtrMode = HAL_OSPI_INSTRUCTION_DTR_DISABLE;
+	sCommand.AddressMode = HAL_OSPI_ADDRESS_NONE;
+	sCommand.AlternateBytesMode = HAL_OSPI_ALTERNATE_BYTES_NONE;
+	sCommand.DataMode = HAL_OSPI_DATA_NONE;
+	sCommand.DummyCycles = 0;
+	sCommand.DQSMode = HAL_OSPI_DQS_DISABLE;
+	sCommand.SIOOMode = HAL_OSPI_SIOO_INST_EVERY_CMD;
+	/* Send Write Enable command in single SPI mode */
+	if (HAL_OSPI_Command(hospi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
+		LOG_ERR("OSPI Write Enable command failed");
+		return -EIO;
+	}
+
+	/* Initialize Automatic-Polling mode to wait until WEL=1 */
+	sCommand.Instruction = SPI_NOR_CMD_RDSR;
+	sCommand.DataMode = HAL_OSPI_DATA_1_LINE;
+	sCommand.DataDtrMode = HAL_OSPI_DATA_DTR_DISABLE;
+	sCommand.NbData = 1;
+	if (HAL_OSPI_Command(hospi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
+		LOG_ERR("OSPI Automatic-Polling failed");
+		return -EIO;
+	}
+	/* Set the mask to 0x02 to mask all Status REG bits except WEL */
+	/* Set the match to 0x02 to check if the WEL bit is set */
+	sConfig.Match = SPI_NOR_WREN_MATCH;
+	sConfig.Mask = SPI_NOR_WREN_MASK;
+	sConfig.MatchMode = HAL_OSPI_MATCH_MODE_AND;
+	sConfig.Interval = SPI_NOR_AUTO_POLLING_INTERVAL;
+	sConfig.AutomaticStop = HAL_OSPI_AUTOMATIC_STOP_ENABLE;
+
+	/* Start Automatic-Polling mode to wait until WEL=1 */
+	if (HAL_OSPI_AutoPolling(hospi, &sConfig, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
+		LOG_ERR("OSPI Automatic-Polling failed");
+		return -EIO;
+	}
+	return 0;
+}
+
+/* Configures the MX25LM51245G memory during the init */
+static int flash_stm32_ospi_DTR_config(OSPI_HandleTypeDef *hospi)
+{
+	OSPI_RegularCmdTypeDef sCommand;
+	uint8_t tmp;
 	/* Enable writing to memory in order to set Dummy */
-	ospi_command.OperationType      = HAL_OSPI_OPTYPE_COMMON_CFG;
-	ospi_command.FlashId            = HAL_OSPI_FLASH_ID_1;
-	ospi_command.InstructionMode    = HAL_OSPI_INSTRUCTION_1_LINE;
-	ospi_command.InstructionSize    = HAL_OSPI_INSTRUCTION_8_BITS;
-	ospi_command.InstructionDtrMode = HAL_OSPI_INSTRUCTION_DTR_DISABLE;
-	ospi_command.AddressDtrMode     = HAL_OSPI_ADDRESS_DTR_DISABLE;
-	ospi_command.AlternateBytesMode = HAL_OSPI_ALTERNATE_BYTES_NONE;
-	ospi_command.DataDtrMode        = HAL_OSPI_DATA_DTR_DISABLE;
-	ospi_command.DummyCycles        = 0;
-	ospi_command.DQSMode            = HAL_OSPI_DQS_DISABLE;
-	ospi_command.SIOOMode           = HAL_OSPI_SIOO_INST_EVERY_CMD;
+	flash_stm32_ospi_write_enable(hospi);
+	/* Initialize Indirect write mode to configure Dummy */
+	sCommand.OperationType = HAL_OSPI_OPTYPE_COMMON_CFG;
+	sCommand.FlashId = HAL_OSPI_FLASH_ID_1;
+	sCommand.InstructionMode = HAL_OSPI_INSTRUCTION_1_LINE;
+	sCommand.InstructionSize = HAL_OSPI_INSTRUCTION_8_BITS;
+	sCommand.InstructionDtrMode = HAL_OSPI_INSTRUCTION_DTR_DISABLE;
+	sCommand.Instruction = SPI_NOR_CMD_CFGREG2;
+	sCommand.Address = SPI_NOR_REG2_ADDR3;
+	sCommand.AddressMode = HAL_OSPI_ADDRESS_1_LINE;
+	sCommand.AddressSize = HAL_OSPI_ADDRESS_32_BITS;
+	sCommand.AddressDtrMode = HAL_OSPI_ADDRESS_DTR_DISABLE;
+	sCommand.AlternateBytesMode = HAL_OSPI_ALTERNATE_BYTES_NONE;
+	sCommand.DataMode = HAL_OSPI_DATA_1_LINE;
+	sCommand.DataDtrMode= HAL_OSPI_DATA_DTR_DISABLE;
+	sCommand.NbData = 1;
+	sCommand.DummyCycles = 0;
+	sCommand.DQSMode = HAL_OSPI_DQS_DISABLE;
+	sCommand.SIOOMode = HAL_OSPI_SIOO_INST_EVERY_CMD;
 
-	/* Enable write operations in single SPI mode */
-	ospi_command.Instruction = SPI_NOR_CMD_WREN;
-	ospi_command.DataMode    = HAL_OSPI_DATA_NONE;
-	ospi_command.AddressMode = HAL_OSPI_ADDRESS_NONE;
-
-	if (HAL_OSPI_Command(hospi, &ospi_command, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
+	if (HAL_OSPI_Command(hospi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
 		LOG_ERR("OSPI write op failed");
 		return -EIO;
 	}
-
-	/* reconfigure OSPI to automatic polling mode to wait for write enabling */
-	ospi_command.Instruction    = SPI_NOR_OCMD_RDSR;
-	ospi_command.Address        = 0x0;
-	ospi_command.AddressMode    = HAL_OSPI_ADDRESS_8_LINES;
-	ospi_command.AddressSize    = HAL_OSPI_ADDRESS_32_BITS;
-	ospi_command.AddressDtrMode = HAL_OSPI_ADDRESS_DTR_DISABLE;
-	ospi_command.DataMode       = HAL_OSPI_DATA_8_LINES;
-	ospi_command.DataDtrMode    = HAL_OSPI_DATA_DTR_DISABLE;
-	ospi_command.NbData         = 1;
-	ospi_command.DummyCycles    = 4;
-
-	if (HAL_OSPI_Command(hospi, &ospi_command, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
-		LOG_ERR("OSPI reconfig auto polling failed");
-		return -EIO;
-	}
-
-	ospi_cfg.MatchMode           = HAL_OSPI_MATCH_MODE_AND;
-	ospi_cfg.AutomaticStop       = HAL_OSPI_AUTOMATIC_STOP_ENABLE;
-	ospi_cfg.Interval            = 0x10;
-	ospi_cfg.Match               = SPI_NOR_WREN_MATCH; /* 0x02 */
-	ospi_cfg.Mask                = SPI_NOR_WREN_MASK; /* 0x02 */
-
-	if (HAL_OSPI_AutoPolling(hospi, &ospi_cfg, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
-		LOG_ERR("OSPI AutoPolling failed");
-		return -EIO;
-	}
-
-	/* Initialize Indirect write mode to configure Dummy */
-	ospi_command.Instruction = SPI_NOR_CMD_CFGREG2;
-	ospi_command.AddressMode = HAL_OSPI_ADDRESS_1_LINE;
-	ospi_command.AddressSize = HAL_OSPI_ADDRESS_32_BITS;
-
-	ospi_command.Address = 0;
-	reg = 0x2;
-	/* Write Configuration register 2 (with Octal I/O SPI protocol) */
-	if (HAL_OSPI_Command(hospi, &ospi_command, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
-		LOG_ERR("OSPI write cfg failed");
-		return -EIO;
-	}
 	/* Write Configuration register 2 with new dummy cycles */
-
-	if (HAL_OSPI_Transmit(hospi, &reg, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
-		LOG_ERR("OSPI write cfg tx failed");
+	tmp = SPI_NOR_CR2_DUMMY_CYCLES_66MHZ;
+	if (HAL_OSPI_Transmit(hospi, &tmp, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
+		LOG_ERR("OSPI write dummy failed");
 		return -EIO;
 	}
-
-	HAL_Delay(40);
+	if (flash_stm32_ospi_autoPolling_WIP(hospi) != 0) {
+		LOG_ERR("OSPI write dummy failed");
+		return -EIO;
+	}
+	/* Enable writing to memory in order to set Octal DTR mode */
+	if (flash_stm32_ospi_write_enable(hospi) != 0) {
+		LOG_ERR("OSPI write dummy failed");
+		return -EIO;
+	}
+	/* Initialize OCTOSPI to Indirect write mode to configure Octal mode */
+	sCommand.Instruction = SPI_NOR_CMD_CFGREG2;
+	sCommand.Address = SPI_NOR_REG2_ADDR1;
+	sCommand.AddressMode = HAL_OSPI_ADDRESS_1_LINE;
+	if (HAL_OSPI_Command(hospi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
+		LOG_ERR("OSPI write dummy failed");
+		return -EIO;
+	}
+	/* Write Configuration register 2 with with Octal mode */
+	tmp = SPI_NOR_CR2_DTR_OPI_EN;
+	if (HAL_OSPI_Transmit(hospi, &tmp, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
+		LOG_ERR("OSPI Configuration register 2 failed");
+		return -EIO;
+	}
 	return 0;
 }
 
@@ -745,19 +832,15 @@ static int flash_stm32_ospi_init(const struct device *dev)
 	int ret;
 
 	/* Signals configuration */
-	ret = stm32_dt_pinctrl_configure(dev_cfg->pinctrl_list,
-					 dev_cfg->pinctrl_list_size,
-					 (uint32_t)dev_cfg->regs);
+	ret = pinctrl_apply_state(dev_cfg->pcfg, PINCTRL_STATE_DEFAULT);
 	if (ret < 0) {
 		LOG_ERR("OSPI pinctrl setup failed (%d)", ret);
 		return ret;
 	}
 
 	/* Initializes the independent peripherals clock */
-	__HAL_RCC_OSPI_CONFIG(RCC_OSPICLKSOURCE_PLL1); /* PLL1 is the clock source */
-	__HAL_RCC_OSPI2_CLK_ENABLE();
-	__HAL_RCC_OSPI2_FORCE_RESET();
-	__HAL_RCC_OSPI2_RELEASE_RESET();
+//	__HAL_RCC_OSPI_CONFIG(RCC_OSPICLKSOURCE_PLL1); /* PLL1 is the clock source */
+	__HAL_RCC_OSPI_CONFIG(RCC_OSPICLKSOURCE_SYSCLK); /* */
 
 #if STM32_OSPI_USE_DMA
 	/*
@@ -847,12 +930,12 @@ static int flash_stm32_ospi_init(const struct device *dev)
 	__ASSERT_NO_MSG(prescaler <= STM32_OSPI_CLOCK_PRESCALER_MAX);
 
 	/* Initialize OSPI HAL structure completely */
-	dev_data->hospi.Init.ClockPrescaler = prescaler;
+//	dev_data->hospi.Init.ClockPrescaler = prescaler;
+	dev_data->hospi.Init.ClockPrescaler = 4;
 	dev_data->hospi.Init.DeviceSize = find_lsb_set(dev_cfg->flash_size);
-	dev_data->hospi.Init.FifoThreshold = 16;
 	dev_data->hospi.Init.DualQuad = HAL_OSPI_DUALQUAD_DISABLE;
 	dev_data->hospi.Init.MemoryType = HAL_OSPI_MEMTYPE_MACRONIX;
-	dev_data->hospi.Init.ChipSelectHighTime = 2;
+	dev_data->hospi.Init.ChipSelectHighTime = 3;
 	dev_data->hospi.Init.FreeRunningClock = HAL_OSPI_FREERUNCLK_DISABLE;
 	dev_data->hospi.Init.ClockMode = HAL_OSPI_CLOCK_MODE_0;
 	dev_data->hospi.Init.WrapSize = HAL_OSPI_WRAP_NOT_SUPPORTED;
@@ -860,13 +943,15 @@ static int flash_stm32_ospi_init(const struct device *dev)
 	dev_data->hospi.Init.DelayHoldQuarterCycle = HAL_OSPI_DHQC_ENABLE;
 	dev_data->hospi.Init.ChipSelectBoundary = 0;
 	dev_data->hospi.Init.DelayBlockBypass = HAL_OSPI_DELAY_BLOCK_USED;
-	dev_data->hospi.Init.MaxTran = 0;
+//	dev_data->hospi.Init.DelayBlockBypass = HAL_OSPI_DELAY_BLOCK_BYPASSED;
+//	dev_data->hospi.Init.MaxTran = 0;
 	dev_data->hospi.Init.Refresh = 0;
 	if (HAL_OSPI_Init(&dev_data->hospi) != HAL_OK) {
 		LOG_ERR("OSPI Init failed");
 		return -EIO;
 	}
 
+#if defined(CONFIG_SOC_SERIES_STM32U5X)
 	/* OCTOSPI I/O manager init Function */
 	OSPIM_CfgTypeDef ospi_mgr_cfg = {0};
 
@@ -877,12 +962,14 @@ static int flash_stm32_ospi_init(const struct device *dev)
 		ospi_mgr_cfg.NCSPort = 1;
 		ospi_mgr_cfg.IOLowPort = HAL_OSPIM_IOPORT_1_LOW;
 		ospi_mgr_cfg.IOHighPort = HAL_OSPIM_IOPORT_1_HIGH;
+
 	} else if (dev_data->hospi.Instance == OCTOSPI2) {
 		ospi_mgr_cfg.ClkPort = 2;
 		ospi_mgr_cfg.DQSPort = 2;
 		ospi_mgr_cfg.NCSPort = 2;
 		ospi_mgr_cfg.IOLowPort = HAL_OSPIM_IOPORT_2_LOW;
 		ospi_mgr_cfg.IOHighPort = HAL_OSPIM_IOPORT_2_HIGH;
+
 	}
 	ospi_mgr_cfg.Req2AckTime = 1; /* arbitrary value */
 	if (HAL_OSPIM_Config(&dev_data->hospi, &ospi_mgr_cfg,
@@ -899,9 +986,9 @@ static int flash_stm32_ospi_init(const struct device *dev)
 		LOG_ERR("OSPI DelayBlock failed");
 		return -EIO;
 	}
-
+#endif /* CONFIG_SOC_SERIES_STM32U5X */
 	/* Configure the memory in octal mode */
-	if (flash_stm32_ospi_dtr_mode_config(&dev_data->hospi) != 0) {
+	if (flash_stm32_ospi_DTR_config(&dev_data->hospi) != 0) {
 		LOG_ERR("OSPI octal mode cfg failed");
 		return -EIO;
 	}
@@ -964,6 +1051,7 @@ static int flash_stm32_ospi_init(const struct device *dev)
 
 			if (ret != 0) {
 				LOG_ERR("SFDP BFP failed: %d", ret);
+				printk("SFDP BFP failed\n");
 				break;
 			}
 		}
@@ -983,6 +1071,7 @@ static int flash_stm32_ospi_init(const struct device *dev)
 	return 0;
 }
 
+#if STM32_OSPI_USE_DMA
 #define DMA_CHANNEL_CONFIG(node, dir)					\
 		DT_DMAS_CELL_BY_NAME(node, dir, channel_config)
 
@@ -1009,6 +1098,9 @@ static int flash_stm32_ospi_init(const struct device *dev)
 			(NULL))						\
 		},
 
+#else
+#define OSPI_DMA_CHANNEL(node, dir)
+#endif /* CONFIG_USE_STM32_HAL_DMA */
 #define OSPI_FLASH_MODULE(drv_id, flash_id)					\
 		(DT_DRV_INST(drv_id), ospi_nor_flash_##flash_id)
 
@@ -1028,8 +1120,7 @@ static const struct flash_stm32_ospi_config flash_stm32_ospi_cfg = {
 	.flash_size = DT_INST_PROP(0, size) / 8U,
 	.max_frequency = DT_INST_PROP(0, ospi_max_frequency),
 	.data_mode = DT_INST_PROP(0, data_mode),
-	.pinctrl_list = ospi_pins,
-	.pinctrl_list_size = ARRAY_SIZE(ospi_pins),
+	.pcfg = PINCTRL_DT_DEV_CONFIG_GET(STM32_OSPI_NODE),
 };
 
 static struct flash_stm32_ospi_data flash_stm32_ospi_dev_data = {
@@ -1056,5 +1147,3 @@ static void flash_stm32_ospi_irq_config_func(const struct device *dev)
 		    flash_stm32_ospi_isr, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_IRQN(STM32_OSPI_NODE));
 }
-
-#endif
