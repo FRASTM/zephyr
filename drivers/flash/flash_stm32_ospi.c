@@ -144,18 +144,29 @@ static int ospi_read_access_sdfp(const struct device *dev, OSPI_RegularCmdTypeDe
 	cmd->NbData = size;
 
 	dev_data->cmd_status = 0;
-
+#if defined(CONFIG_BOARD_STM32L562E_DK)
+	/* simulate the SDFP */
+	uint8_t
+	sdfp_table[] = { 0x50, 0x44, 0x46, 0x53, 0xff, 0x00, 0x01, 0x00,
+	0x09, 0x01, 0x00 ,0x00,
+	0xff, 0x00, 0x00, 0x10};
+	data = (uint8_t *)sdfp_table;
+#else
 	hal_ret = HAL_OSPI_Command(&dev_data->hospi, cmd,
 				HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
 	if (hal_ret != HAL_OK) {
 		LOG_ERR("%d: Failed to send OSPI instruction", hal_ret);
+		printk("Failed to send OSPI instruction\n");
+		return -EIO;
 	}
 
 	hal_ret = HAL_OSPI_Receive(&dev_data->hospi, data, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
 	if (hal_ret != HAL_OK) {
 		LOG_ERR("%d: Failed to read data", hal_ret);
+		printk("Failed to read data\n");
+		return -EIO;
 	}
-
+#endif /* CONFIG_SDFP_SUPPORT */
 	return dev_data->cmd_status;
 }
 
@@ -178,6 +189,7 @@ static int ospi_read_access(const struct device *dev, OSPI_RegularCmdTypeDef *cm
 //	hal_ret = HAL_OSPI_Command(&dev_data->hospi, cmd, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
 	if (hal_ret != HAL_OK) {
 		LOG_ERR("%d: Failed to send OSPI instruction", hal_ret);
+		printk("Failed to send OSPI instruction\n");
 		return -EIO;
 	}
 
@@ -188,6 +200,7 @@ static int ospi_read_access(const struct device *dev, OSPI_RegularCmdTypeDef *cm
 #endif
 	if (hal_ret != HAL_OK) {
 		LOG_ERR("%d: Failed to read data", hal_ret);
+		printk("Failed to read data\n");
 		return -EIO;
 	}
 
@@ -887,7 +900,8 @@ void HAL_OSPI_ErrorCallback(OSPI_HandleTypeDef *hospi)
 	struct flash_stm32_ospi_data *dev_data =
 		CONTAINER_OF(hospi, struct flash_stm32_ospi_data, hospi);
 
-	LOG_DBG("Enter");
+	LOG_DBG("Error cb");
+	printk("Error cb\n");
 
 	dev_data->cmd_status = -EIO;
 
@@ -902,6 +916,9 @@ void HAL_OSPI_CmdCpltCallback(OSPI_HandleTypeDef *hospi)
 	struct flash_stm32_ospi_data *dev_data =
 		CONTAINER_OF(hospi, struct flash_stm32_ospi_data, hospi);
 
+	LOG_DBG("Cmd Cplt cb");
+	printk("Cmd Cplt cb\n");
+
 	k_sem_give(&dev_data->sync);
 }
 
@@ -912,6 +929,9 @@ void HAL_OSPI_RxCpltCallback(OSPI_HandleTypeDef *hospi)
 {
 	struct flash_stm32_ospi_data *dev_data =
 		CONTAINER_OF(hospi, struct flash_stm32_ospi_data, hospi);
+
+	LOG_DBG("Rx Cplt cb");
+	printk("Rx Cplt cb\n");
 
 	k_sem_give(&dev_data->sync);
 }
@@ -924,6 +944,9 @@ void HAL_OSPI_TxCpltCallback(OSPI_HandleTypeDef *hospi)
 	struct flash_stm32_ospi_data *dev_data =
 		CONTAINER_OF(hospi, struct flash_stm32_ospi_data, hospi);
 
+	LOG_DBG("Tx Cplt cb");
+	printk("Tx Cplt cb\n");
+
 	k_sem_give(&dev_data->sync);
 }
 
@@ -934,6 +957,9 @@ void HAL_OSPI_StatusMatchCallback(OSPI_HandleTypeDef *hospi)
 {
 	struct flash_stm32_ospi_data *dev_data =
 		CONTAINER_OF(hospi, struct flash_stm32_ospi_data, hospi);
+
+	LOG_DBG("Status Match cb");
+	printk("Status Match cb\n");
 
 	k_sem_give(&dev_data->sync);
 }
@@ -946,7 +972,8 @@ void HAL_OSPI_TimeOutCallback(OSPI_HandleTypeDef *hospi)
 	struct flash_stm32_ospi_data *dev_data =
 		CONTAINER_OF(hospi, struct flash_stm32_ospi_data, hospi);
 
-	LOG_DBG("Enter");
+	LOG_DBG("Timeout cb");
+	printk("Timeout cb\n");
 
 	dev_data->cmd_status = -EIO;
 
@@ -984,7 +1011,7 @@ static int setup_pages_layout(const struct device *dev)
 	uint32_t layout_page_size = data->page_size;
 	uint8_t value = 0;
 	int rv = 0;
-
+printk(" flash size = %x\n", flash_size);
 	/* Find the smallest erase size. */
 	for (size_t i = 0; i < ARRAY_SIZE(data->erase_types); ++i) {
 		const struct jesd216_erase_type *etp = &data->erase_types[i];
@@ -1234,8 +1261,11 @@ printk("OSPI delay block init'd\n");
 	ret = ospi_read_norid(dev, nor_id, sizeof(nor_id));
 	if (ret != 0) {
 		LOG_ERR("reading Nor-flash ID failed: %d", ret);
+		printk("reading Nor-flash ID failed\n");
 		return ret;
 	}
+printk("reading Nor-flash ID : Manuf 0x%X, Mem Type 0x%X, Density 0x%X \n",
+       nor_id[2], nor_id[0], nor_id[1]);
 
 	/* Initialize semaphores */
 	k_sem_init(&dev_data->sem, 1, 1);
@@ -1243,6 +1273,8 @@ printk("OSPI delay block init'd\n");
 
 	/* Run IRQ init */
 	dev_cfg->irq_config(dev);
+
+printk("reading SFDP   ");
 
 	/* send the instruction to read the SFDP  */
 	const uint8_t decl_nph = 2;
@@ -1252,10 +1284,12 @@ printk("OSPI delay block init'd\n");
 		struct jesd216_sfdp_header sfdp;
 	} u;
 	const struct jesd216_sfdp_header *hp = &u.sfdp;
+printk("reading SFDP   ");
 
 	ret = ospi_read_sfdp(dev, 0, u.raw, sizeof(u.raw));
 	if (ret != 0) {
 		LOG_ERR("SFDP read failed: %d", ret);
+		printk("SFDP read failed\n");
 		return ret;
 	}
 
@@ -1265,10 +1299,14 @@ printk("OSPI delay block init'd\n");
 		/* this is not and error, continue */
 		LOG_INF("SFDP magic not supported");
 		dev_data->page_size = 0x1000; /* 4K erase page size */
+		printk("SFDP magic not supported 0x%X\n", magic);
 		goto run_nor_init;
 	}
 
+printk("  magic %08x ", magic);
 	LOG_INF("%s: SFDP v %u.%u AP %x with %u PH", dev->name,
+		hp->rev_major, hp->rev_minor, hp->access, 1 + hp->nph);
+printk("  %s: SFDP v %u.%u AP %x with %u PH \n", dev->name,
 		hp->rev_major, hp->rev_minor, hp->access, 1 + hp->nph);
 
 	const struct jesd216_param_header *php = hp->phdr;
@@ -1306,9 +1344,11 @@ printk("OSPI delay block init'd\n");
 
 run_nor_init:
 
+printk("OSPI octal mode cfg'd\n");
 	/* Configure the memory in octal mode */
 	if (flash_stm32_ospi_mode_config(&dev_data->hospi) != 0) {
 		LOG_ERR("OSPI octal mode cfg failed");
+		printk("OSPI octal mode cfg failed\n");
 		return -EIO;
 	}
 
@@ -1317,6 +1357,7 @@ run_nor_init:
 	ret = setup_pages_layout(dev);
 	if (ret != 0) {
 		LOG_ERR("layout setup failed: %d", ret);
+		printk("layout setup failed\n");
 		return -ENODEV;
 	}
 #endif /* CONFIG_FLASH_PAGE_LAYOUT */
