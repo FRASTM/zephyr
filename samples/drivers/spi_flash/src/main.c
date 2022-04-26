@@ -22,6 +22,9 @@
 #elif DT_NODE_HAS_STATUS(DT_INST(0, st_stm32_qspi_nor), okay)
 #define FLASH_DEVICE DT_LABEL(DT_INST(0, st_stm32_qspi_nor))
 #define FLASH_NAME "JEDEC QSPI-NOR"
+#elif DT_NODE_HAS_STATUS(DT_INST(0, st_stm32_ospi_nor), okay)
+#define FLASH_DEVICE DT_LABEL(DT_INST(0, st_stm32_ospi_nor))
+#define FLASH_NAME "JEDEC OSPI-NOR"
 #else
 #error Unsupported flash driver
 #endif
@@ -36,6 +39,10 @@
 #elif defined(CONFIG_BOARD_NPCX9M6F_EVB) || \
 	defined(CONFIG_BOARD_NPCX7M6FB_EVB)
 #define FLASH_TEST_REGION_OFFSET 0x7F000
+#elif defined(CONFIG_BOARD_STM32L562E_DK) || \
+	defined(CONFIG_BOARD_B_U585I_IOT02A)
+/* NOR flash size is 0x80000 */
+#define FLASH_TEST_REGION_OFFSET 0x10000
 #else
 #define FLASH_TEST_REGION_OFFSET 0xff000
 #endif
@@ -67,6 +74,7 @@ void main(void)
 	 */
 	printf("\nTest 1: Flash erase\n");
 
+	/* full flash erase if FLASH_TEST_REGION_OFFSET = 0  FLASH_SECTOR_SIZE = flash size */
 	rc = flash_erase(flash_dev, FLASH_TEST_REGION_OFFSET,
 			 FLASH_SECTOR_SIZE);
 	if (rc != 0) {
