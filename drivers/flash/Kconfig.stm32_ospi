@@ -1,9 +1,10 @@
 # STM32 Octo SPI flash driver configuration options
 
-# Copyright (c) 2021 STMicroelctronics
+# Copyright (c) 2022 STMicroelctronics
 # SPDX-License-Identifier: Apache-2.0
 
 DT_COMPAT_ST_STM32_OSPI_NOR := st,stm32-ospi-nor
+DT_STM32_OCTOSPI_HAS_DMA := $(dt_nodelabel_has_prop,octospi1,dmas)
 
 config FLASH_STM32_OSPI
 	bool "STM32 Octo SPI Flash driver"
@@ -11,9 +12,12 @@ config FLASH_STM32_OSPI
 	default $(dt_compat_enabled,$(DT_COMPAT_ST_STM32_OSPI_NOR))
 	select USE_STM32_HAL_OSPI
 	select USE_STM32_LL_DLYB
+	select USE_STM32_HAL_MDMA if SOC_SERIES_STM32H7X
 	select FLASH_HAS_DRIVER_ENABLED
 	select FLASH_JESD216
 	select FLASH_PAGE_LAYOUT
+	select DMA if $(DT_STM32_OCTOSPI_HAS_DMA)
+	select USE_STM32_HAL_DMA if $(DT_STM32_OCTOSPI_HAS_DMA)
 	select FLASH_HAS_PAGE_LAYOUT
 	help
 	  Enable OSPI-NOR support on the STM32 family of processors.
