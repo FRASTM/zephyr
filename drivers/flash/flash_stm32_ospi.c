@@ -33,7 +33,8 @@ LOG_MODULE_REGISTER(flash_stm32_ospi, CONFIG_FLASH_LOG_LEVEL);
 
 #define STM32_OSPI_USE_DMA DT_NODE_HAS_PROP(DT_PARENT(DT_DRV_INST(0)), dmas)
 
-#if  DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dma)
+#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dma) || DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dmamux)
+uint32_t table_m_size[] = {
 	LL_DMA_MDATAALIGN_BYTE,
 	LL_DMA_MDATAALIGN_HALFWORD,
 	LL_DMA_MDATAALIGN_WORD,
@@ -80,7 +81,7 @@ struct flash_stm32_ospi_data {
 	/* Number of bytes per page */
 	uint16_t page_size;
 	int cmd_status;
-#if  DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dma)
+#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dma) || DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dmamux)
 	struct stream dma;
 #endif
 };
@@ -1465,7 +1466,8 @@ static int flash_stm32_ospi_init(const struct device *dev)
 	dma_cfg.user_data = &hdma;
 	/* HACK: This field is used to inform driver that it is overridden */
 	dma_cfg.linked_channel = STM32_DMA_HAL_OVERRIDE;
-	ret = dma_config(dev_data->dma.dev, dev_data->dma.channel, &dma_cfg);
+	/* Because of the STREAM OFFSET, the DMA channel given here is from 1 - 8 */
+	ret = dma_config(dev_data->dma.dev, dev_data->dma.channel + 1, &dma_cfg);
 	if (ret != 0) {
 		return ret;
 	}
@@ -1484,6 +1486,7 @@ static int flash_stm32_ospi_init(const struct device *dev)
 	hdma.Init.MemInc = DMA_MINC_ENABLE;
 	hdma.Init.Mode = DMA_NORMAL;
 	hdma.Init.Priority = dma_cfg.channel_priority;
+	hdma.Init.Direction = DMA_PERIPH_TO_MEMORY;
 #ifdef CONFIG_DMA_STM32_V1
 	/* TODO: Not tested in this configuration */
 	hdma.Init.Channel = dma_cfg.dma_slot;
@@ -1492,10 +1495,12 @@ static int flash_stm32_ospi_init(const struct device *dev)
 #else
 	hdma.Init.Request = dma_cfg.dma_slot;
 #ifdef CONFIG_DMAMUX_STM32
-	/* HAL expects a valid DMA channel (not DAMMUX) */
-	/* TODO: Get DMA instance from DT */
-	hdma.Instance = __LL_DMA_GET_CHANNEL_INSTANCE(DMA1,
-						      dev_data->dma.channel+1);
+	/*
+	 * HAL expects a valid DMA channel (not DMAMUX).
+	 * The channel is from 0 to 7 because of the STREAM_OFFSET in the dma_stm32 driver
+	 */
+	hdma.Instance = __LL_DMA_GET_CHANNEL_INSTANCE(dev_data->dma.reg,
+						      dev_data->dma.channel);
 #else
 	hdma.Instance = __LL_DMA_GET_CHANNEL_INSTANCE(dev_data->dma.reg,
 						      dev_data->dma.channel-1);
