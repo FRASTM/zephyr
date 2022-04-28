@@ -33,7 +33,7 @@ LOG_MODULE_REGISTER(flash_stm32_ospi, CONFIG_FLASH_LOG_LEVEL);
 
 #define STM32_OSPI_USE_DMA DT_NODE_HAS_PROP(DT_PARENT(DT_DRV_INST(0)), dmas)
 
-#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dma) || DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dmamux)
+#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dmamux)
 uint32_t table_m_size[] = {
 	LL_DMA_MDATAALIGN_BYTE,
 	LL_DMA_MDATAALIGN_HALFWORD,
@@ -45,7 +45,23 @@ uint32_t table_p_size[] = {
 	LL_DMA_PDATAALIGN_HALFWORD,
 	LL_DMA_PDATAALIGN_WORD,
 };
+#endif /* st_stm32_dmamux */
 
+#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dma_v3)
+uint32_t table_src_size[] = {
+	LL_DMA_SRC_DATAWIDTH_BYTE,
+	LL_DMA_SRC_DATAWIDTH_HALFWORD,
+	LL_DMA_SRC_DATAWIDTH_WORD,
+};
+
+uint32_t table_dest_size[] = {
+	LL_DMA_DEST_DATAWIDTH_BYTE,
+	LL_DMA_DEST_DATAWIDTH_HALFWORD,
+	LL_DMA_DEST_DATAWIDTH_WORD,
+};
+#endif /* st_stm32_dmamux */
+
+#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dma_v3) || DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dmamux)
 struct stream {
 	DMA_TypeDef *reg;
 	const struct device *dev;
@@ -81,7 +97,7 @@ struct flash_stm32_ospi_data {
 	/* Number of bytes per page */
 	uint16_t page_size;
 	int cmd_status;
-#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dma) || DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dmamux)
+#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dma_v3) || DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dmamux)
 	struct stream dma;
 #endif
 };
@@ -151,7 +167,7 @@ static int ospi_read_access(const struct device *dev, OSPI_RegularCmdTypeDef *cm
 #if STM32_OSPI_USE_DMA
 	hal_ret = HAL_OSPI_Receive_DMA(&dev_data->hospi, data);
 #else
-	hal_ret = HAL_OSPI_Receive(&dev_data->hospi, data, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
+	hal_ret = HAL_OSPI_Receive_IT(&dev_data->hospi, data, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
 #endif
 	if (hal_ret != HAL_OK) {
 		LOG_ERR("%d: Failed to read data", hal_ret);
@@ -175,6 +191,12 @@ static int ospi_write_access(const struct device *dev, OSPI_RegularCmdTypeDef *c
 
 	cmd->NbData = size;
 
+	/* in OPI/STR the 3-byte AddressSize is not supported by the NOR flash */
+	if ((dev_cfg->data_mode == STM32_OSPI_OPI_MODE) && (cmd->AddressSize != HAL_OSPI_ADDRESS_32_BITS)) {
+		LOG_ERR("OSPI wr in OPI/STR mode is for 32bit address only");
+		return -EIO;
+	}
+
 	dev_data->cmd_status = 0;
 
 	hal_ret = HAL_OSPI_Command(&dev_data->hospi, cmd, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
@@ -186,11 +208,11 @@ static int ospi_write_access(const struct device *dev, OSPI_RegularCmdTypeDef *c
 #if STM32_OSPI_USE_DMA
 	hal_ret = HAL_OSPI_Transmit_DMA(&dev_data->hospi, (uint8_t *)data);
 #else
-	hal_ret = HAL_OSPI_Transmit(&dev_data->hospi, (uint8_t *)data,
+	hal_ret = HAL_OSPI_Transmit_IT(&dev_data->hospi, (uint8_t *)data,
 				    HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
 #endif
 	if (hal_ret != HAL_OK) {
-		LOG_ERR("%d: Failed to read data", hal_ret);
+		LOG_ERR("%d: Failed to write data", hal_ret);
 		return -EIO;
 	}
 	LOG_DBG("CCR 0x%x", dev_cfg->regs->CCR);
@@ -957,6 +979,7 @@ static int flash_stm32_ospi_erase(const struct device *dev, off_t addr,
 			size -= dev_cfg->flash_size;
 		} else {
 			/* sector erase */
+			LOG_INF("Sector Erase");
 			cmd_erase.Address = addr;
 
 			const struct jesd216_erase_type *erase_types =
@@ -1142,21 +1165,23 @@ static int flash_stm32_ospi_write(const struct device *dev, off_t addr,
 		.DQSMode = HAL_OSPI_DQS_DISABLE,
 		.SIOOMode = HAL_OSPI_SIOO_INST_EVERY_CMD,
 	};
-
+	LOG_INF("OSPI: write %u data", size);
 	ospi_lock_thread(dev);
+
+	ret = stm32_ospi_mem_ready(&dev_data->hospi,
+						dev_cfg->data_mode, dev_cfg->data_rate);
+		if (ret != 0) {
+			LOG_ERR("OSPI: write not ready");
+			return -EIO;
+	}
 
 	while ((size > 0) && (ret == 0)) {
 		size_t to_write = size;
 
-		ret = stm32_ospi_mem_ready(&dev_data->hospi,
-						 dev_cfg->data_mode, dev_cfg->data_rate);
-		if (ret != 0) {
-			break;
-		}
-
 		ret = stm32_ospi_write_enable(&dev_data->hospi,
 						    dev_cfg->data_mode, dev_cfg->data_rate);
 		if (ret != 0) {
+			LOG_ERR("OSPI: write not enabled");
 			break;
 		}
 		/* Don't write more than a page. */
@@ -1171,12 +1196,14 @@ static int flash_stm32_ospi_write(const struct device *dev, off_t addr,
 						(addr % SPI_NOR_PAGE_SIZE);
 		}
 
+		/* using 32bits address also in SPI/STR mode */
 		cmd_pp.Instruction = (dev_cfg->data_mode == STM32_OSPI_SPI_MODE)
 				? SPI_NOR_CMD_4B_PP
 				: SPI_NOR_OCMD_PAGE_PRG;
 		cmd_pp.Address = addr;
 		ret = ospi_write_access(dev, &cmd_pp, data, to_write);
 		if (ret != 0) {
+			LOG_ERR("OSPI: write not access");
 			break;
 		}
 
@@ -1188,6 +1215,7 @@ static int flash_stm32_ospi_write(const struct device *dev, off_t addr,
 		ret = stm32_ospi_mem_ready(&dev_data->hospi,
 						 dev_cfg->data_mode, dev_cfg->data_rate);
 		if (ret != 0) {
+			LOG_ERR("OSPI: write PP not ready");
 			break;
 		}
 	}
@@ -1467,7 +1495,7 @@ static int flash_stm32_ospi_init(const struct device *dev)
 	/* HACK: This field is used to inform driver that it is overridden */
 	dma_cfg.linked_channel = STM32_DMA_HAL_OVERRIDE;
 	/* Because of the STREAM OFFSET, the DMA channel given here is from 1 - 8 */
-	ret = dma_config(dev_data->dma.dev, dev_data->dma.channel + 1, &dma_cfg);
+	ret = dma_config(dev_data->dma.dev, (dev_data->dma.channel + STM32_DMA_STREAM_OFFSET), &dma_cfg);
 	if (ret != 0) {
 		return ret;
 	}
@@ -1480,24 +1508,41 @@ static int flash_stm32_ospi_init(const struct device *dev)
 
 	int index = find_lsb_set(dma_cfg.source_data_size) - 1;
 
+#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dma_v3)
+	/**/
+	hdma.Init.BlkHWRequest = DMA_BREQ_SINGLE_BURST;
+	hdma.Init.SrcInc = DMA_SINC_FIXED;
+	hdma.Init.DestInc = DMA_DINC_INCREMENTED;
+	hdma.Init.SrcDataWidth = table_src_size[index];
+	hdma.Init.DestDataWidth = table_dest_size[index];
+	hdma.Init.SrcBurstLength = 4;
+	hdma.Init.DestBurstLength = 4;
+	hdma.Init.TransferAllocatedPort = DMA_SRC_ALLOCATED_PORT0 | DMA_DEST_ALLOCATED_PORT1;
+	hdma.Init.TransferEventMode = DMA_TCEM_BLOCK_TRANSFER;
+#else
 	hdma.Init.PeriphDataAlignment = table_p_size[index];
 	hdma.Init.MemDataAlignment = table_m_size[index];
 	hdma.Init.PeriphInc = DMA_PINC_DISABLE;
 	hdma.Init.MemInc = DMA_MINC_ENABLE;
+#endif /* CONFIG_DMA_STM32_V3 */
 	hdma.Init.Mode = DMA_NORMAL;
 	hdma.Init.Priority = dma_cfg.channel_priority;
 	hdma.Init.Direction = DMA_PERIPH_TO_MEMORY;
+	hdma.Init.Request = dma_cfg.dma_slot;
+
 #ifdef CONFIG_DMA_STM32_V1
 	/* TODO: Not tested in this configuration */
 	hdma.Init.Channel = dma_cfg.dma_slot;
 	hdma.Instance = __LL_DMA_GET_STREAM_INSTANCE(dev_data->dma.reg,
 						     dev_data->dma.channel);
+#elif DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dma_v3)
+	hdma.Instance = LL_DMA_GET_CHANNEL_INSTANCE(dev_data->dma.reg,
+						      dev_data->dma.channel);
 #else
-	hdma.Init.Request = dma_cfg.dma_slot;
 #ifdef CONFIG_DMAMUX_STM32
 	/*
 	 * HAL expects a valid DMA channel (not DMAMUX).
-	 * The channel is from 0 to 7 because of the STREAM_OFFSET in the dma_stm32 driver
+	 * The channel is from 0 to 7 because of the STM32_DMA_STREAM_OFFSET in the dma_stm32 driver
 	 */
 	hdma.Instance = __LL_DMA_GET_CHANNEL_INSTANCE(dev_data->dma.reg,
 						      dev_data->dma.channel);
@@ -1509,7 +1554,11 @@ static int flash_stm32_ospi_init(const struct device *dev)
 
 	/* Initialize DMA HAL */
 	__HAL_LINKDMA(&dev_data->hospi, hdma, hdma);
-	HAL_DMA_Init(&hdma);
+	if (HAL_DMA_Init(&hdma) != HAL_OK) {
+		LOG_ERR("OSPI DMA Init failed");
+		return -EIO;
+	}
+
 
 #endif /* STM32_OSPI_USE_DMA */
 
@@ -1632,6 +1681,7 @@ static int flash_stm32_ospi_init(const struct device *dev)
 		LOG_ERR("OSPI reset failed");
 		return -EIO;
 	}
+	LOG_INF("OSPI memory reset");
 
 	/* check if memory is ready in the SPI/STR mode */
 	if (stm32_ospi_mem_ready(&dev_data->hospi,
