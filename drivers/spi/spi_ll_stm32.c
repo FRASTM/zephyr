@@ -131,6 +131,11 @@ static int spi_stm32_dma_tx_load(const struct device *dev, const uint8_t *buf,
 	/* give the client dev as arg, as the callback comes from the dma */
 	stream->dma_cfg.user_data = data;
 	/* pass our client origin to the dma: data->dma_tx.dma_channel */
+
+
+//	stream->dma_cfg.linked_channel = STM32_DMA_HAL_OVERRIDE;
+
+
 	ret = dma_config(data->dma_tx.dma_dev, data->dma_tx.channel,
 			&stream->dma_cfg);
 	/* the channel is the actual stream from 0 */
@@ -187,6 +192,9 @@ static int spi_stm32_dma_rx_load(const struct device *dev, uint8_t *buf,
 	/* direction is given by the DT */
 	stream->dma_cfg.head_block = blk_cfg;
 	stream->dma_cfg.user_data = data;
+
+
+//	stream->dma_cfg.linked_channel = STM32_DMA_HAL_OVERRIDE;
 
 
 	/* pass our client origin to the dma: data->dma_rx.channel */
@@ -891,6 +899,8 @@ static int spi_stm32_init(const struct device *dev)
 		LOG_ERR("%s device not ready", data->dma_tx.dma_dev->name);
 		return -ENODEV;
 	}
+
+printk(" SPI with DMA transfer\n");
 #endif /* CONFIG_SPI_STM32_DMA */
 
 	err = spi_context_cs_configure_all(&data->ctx);
