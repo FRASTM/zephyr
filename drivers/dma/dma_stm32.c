@@ -109,6 +109,11 @@ static void dma_stm32_irq_handler(const struct device *dev, uint32_t id)
 
 	stream = &config->streams[id];
 
+	/* do not continue if dma channel is not busy */
+	if (stream->busy == false) {
+		return;
+	}
+
 #ifdef CONFIG_DMAMUX_STM32
 	callback_arg = stream->mux_channel;
 #else
@@ -118,7 +123,7 @@ static void dma_stm32_irq_handler(const struct device *dev, uint32_t id)
 		stream->busy = false;
 	}
 
-	/* the dma stream id is in range from STM32_DMA_STREAM_OFFSET..<dma-requests> */
+	/* The dma stream id is in range from STM32_DMA_STREAM_OFFSET..<dma-requests> */
 	if (stm32_dma_is_ht_irq_active(dma, id)) {
 		/* Let HAL DMA handle flags on its own */
 		if (!stream->hal_override) {
@@ -136,14 +141,13 @@ static void dma_stm32_irq_handler(const struct device *dev, uint32_t id)
 		stream->dma_callback(dev, stream->user_data, callback_arg, 0);
 	} else if (stm32_dma_is_unexpected_irq_happened(dma, id)) {
 		LOG_ERR("Unexpected irq happened.");
-		stream->dma_callback(dev, stream->user_data,
-				     callback_arg, -EIO);
-	} else {
-		LOG_ERR("Transfer Error.");
 		dma_stm32_dump_stream_irq(dev, id);
 		dma_stm32_clear_stream_irq(dev, id);
-		stream->dma_callback(dev, stream->user_data,
-				     callback_arg, -EIO);
+		stream->dma_callback(dev, stream->user_data, callback_arg, -EIO);
+	} else if (stm32_dma_is_te_irq_active(dma, id)) {
+		LOG_ERR("Transfer Error.");
+		dma_stm32_clear_te(dma, id);
+		stream->dma_callback(dev, stream->user_data, callback_arg, -EIO);
 	}
 }
 
@@ -454,8 +458,7 @@ DMA_STM32_EXPORT_API int dma_stm32_configure(const struct device *dev,
 			config->head_block->source_addr_adj);
 		return -EINVAL;
 	}
-	LOG_INF("Channel (%d) src inc (%d).",
-				id, DMA_InitStruct.SrcIncMode);
+
 	/* this one is for dest */
 	switch (config->head_block->dest_addr_adj) {
 	case DMA_ADDR_ADJ_INCREMENT:
@@ -471,8 +474,6 @@ DMA_STM32_EXPORT_API int dma_stm32_configure(const struct device *dev,
 			config->head_block->dest_addr_adj);
 		return -EINVAL;
 	}
-	LOG_INF("Channel (%d) dest inc (%d).",
-				id, DMA_InitStruct.DestIncMode);
 #else
 	uint16_t memory_addr_adj = 0, periph_addr_adj = 0;
 
@@ -510,6 +511,7 @@ DMA_STM32_EXPORT_API int dma_stm32_configure(const struct device *dev,
 	} else {
 		DMA_InitStruct.Mode = LL_DMA_MODE_NORMAL;
 	}
+	LOG_INF("Channel (%d) mode (%x).", id, DMA_InitStruct.Mode);
 #endif /* ! CONFIG_DMA_STM32_V3 */
 
 	stream->source_periph = (stream->direction == PERIPHERAL_TO_MEMORY);

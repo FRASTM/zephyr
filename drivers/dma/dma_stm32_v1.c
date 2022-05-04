@@ -257,7 +257,7 @@ inline bool stm32_dma_is_ht_irq_active(DMA_TypeDef *dma, uint32_t id)
 	       dma_stm32_is_ht_active(dma, id);
 }
 
-static inline bool stm32_dma_is_te_irq_active(DMA_TypeDef *dma, uint32_t id)
+inline bool stm32_dma_is_te_irq_active(DMA_TypeDef *dma, uint32_t id)
 {
 	return LL_DMA_IsEnabledIT_TE(dma, dma_stm32_id_to_stream(id)) &&
 	       dma_stm32_is_te_active(dma, id);
