@@ -602,17 +602,6 @@ DMA_STM32_EXPORT_API int dma_stm32_configure(const struct device *dev,
 	if (config->head_block->source_reload_en) {
 		LL_DMA_EnableIT_HT(dma, dma_stm32_id_to_stream(id));
 	}
-#if defined(CONFIG_DMA_STM32_V3)
-	LL_DMA_EnableIT_TO(dma, dma_stm32_id_to_stream(id));
-	LL_DMA_EnableIT_USE(dma, dma_stm32_id_to_stream(id));
-	LL_DMA_EnableIT_ULE(dma, dma_stm32_id_to_stream(id));
-	LL_DMA_EnableIT_DTE(dma, dma_stm32_id_to_stream(id));
-
-
-	LL_DMA_EnableIT_HT(dma, dma_stm32_id_to_stream(id));
-
-
-#endif /* CONFIG_DMA_STM32_V3 */
 
 #if defined(CONFIG_DMA_STM32_V1)
 	if (DMA_InitStruct.FIFOMode == LL_DMA_FIFOMODE_ENABLE) {
@@ -725,15 +714,15 @@ DMA_STM32_EXPORT_API int dma_stm32_stop(const struct device *dev, uint32_t id)
 		return -EINVAL;
 	}
 
-#if !defined(CONFIG_DMAMUX_STM32) || defined(CONFIG_SOC_SERIES_STM32H7X)
+	/* Disable Transfer Complete irq and clear any pending flag */
 	LL_DMA_DisableIT_TC(dma, dma_stm32_id_to_stream(id));
-#endif /* CONFIG_DMAMUX_STM32 */
+
+	stm32_dma_clear_stream_irq(dma, id);
 
 #if defined(CONFIG_DMA_STM32_V1)
 	stm32_dma_disable_fifo_irq(dma, id);
 #endif
 	dma_stm32_disable_stream(dma, id);
-	dma_stm32_clear_stream_irq(dev, id);
 
 	/* Finally, flag stream as free */
 	stream->busy = false;
