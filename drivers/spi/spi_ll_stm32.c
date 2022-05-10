@@ -729,17 +729,15 @@ static int transceive_dma(const struct device *dev,
 	LL_SPI_EnableDMAReq_RX(spi);
 	LL_SPI_EnableDMAReq_TX(spi);
 
-	LL_SPI_Enable(spi);
+	/* do not enable SPI yet, but DMA channel first */
 	if (LL_SPI_GetMode(spi) == LL_SPI_MODE_MASTER) {
 		LL_SPI_StartMasterTransfer(spi);
 	}
-#else
-	LL_SPI_Enable(spi);
 #endif /* CONFIG_SOC_SERIES_STM32H7X */
-
 	/* This is turned off in spi_stm32_complete(). */
 	spi_stm32_cs_control(dev, true);
 
+	/* enable DMA channel first */
 	while (data->ctx.rx_len > 0 || data->ctx.tx_len > 0) {
 		size_t dma_len;
 
@@ -756,6 +754,11 @@ static int transceive_dma(const struct device *dev,
 		ret = spi_dma_move_buffers(dev, dma_len);
 		if (ret != 0) {
 			break;
+		}
+
+		/* enable SPI when DMA is already enabled */
+		if (LL_SPI_IsEnabled(spi) == 0) {
+			LL_SPI_Enable(spi);
 		}
 
 #if !defined(CONFIG_SOC_SERIES_STM32H7X)
