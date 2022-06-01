@@ -1,0 +1,29 @@
+/*
+ * Copyright (c) 2022 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Application overlay for creating temperature sensor device instance
+ */
+
+/ {
+	stm-temp {
+		label = "DIE_TEMP";
+		compatible = "st,stm32-temp-cal";
+		io-channels = <&adc1 19>;
+		status = "okay";
+		ts-cal1-addr = <0x0BFA0710>;
+		ts-cal2-addr = <0x0BFA0742>;
+		ts-cal1-temp = <30>;
+		ts-cal2-temp = <130>;
+		ts-cal-vrefanalog = <3000>;
+		ts-cal-offset = <30>;
+	};
+};
+
+&adc1 {
+	pinctrl-0 = <&adc1_in5_pa0>;
+	pinctrl-names = "default";
+	has-temp-channel;
+	status = "okay";
+};
