@@ -93,14 +93,16 @@ static const uint32_t table_resolution[] = {
 #if defined(CONFIG_SOC_SERIES_STM32F1X) || \
 	defined(STM32F3X_ADC_V2_5)
 	RES(12),
+#elif defined(CONFIG_SOC_SERIES_STM32U5X)
+	RES(8),
+	RES(10),
+	RES(12),
+	RES(14),
 #elif !defined(CONFIG_SOC_SERIES_STM32H7X)
 	RES(6),
 	RES(8),
 	RES(10),
 	RES(12),
-#if defined(CONFIG_SOC_SERIES_STM32U5X)
-	RES(14),
-#endif /* CONFIG_SOC_SERIES_STM32U5X */
 #else
 	RES(8),
 	RES(10),
@@ -465,6 +467,19 @@ static int start_read(const struct device *dev,
 	case 12:
 		resolution = table_resolution[0];
 		break;
+#elif defined(CONFIG_SOC_SERIES_STM32U5X)
+	case 8:
+		resolution = table_resolution[0];
+		break;
+	case 10:
+		resolution = table_resolution[1];
+		break;
+	case 12:
+		resolution = table_resolution[2];
+		break;
+	case 14:
+		resolution = table_resolution[3];
+		break;
 #elif !defined(CONFIG_SOC_SERIES_STM32H7X)
 	case 6:
 		resolution = table_resolution[0];
@@ -478,11 +493,6 @@ static int start_read(const struct device *dev,
 	case 12:
 		resolution = table_resolution[3];
 		break;
-#if defined(CONFIG_SOC_SERIES_STM32U5X)
-	case 14:
-		resolution = table_resolution[4];
-		break;
-#endif /* CONFIG_SOC_SERIES_STM32U5X */
 #else
 	case 8:
 		resolution = table_resolution[0];
@@ -523,6 +533,13 @@ static int start_read(const struct device *dev,
 	 */
 	LL_ADC_SetChannelPreSelection(adc, channel);
 #endif
+#if defined(CONFIG_SOC_SERIES_STM32U5X)
+	/*
+	 * Each channel in the sequence must be previously enabled in PCSEL.
+	 * This register controls the analog switch integrated in the IO level.
+	 */
+	LL_ADC_SetChannelPreselection(adc, channel);
+#endif
 
 #if defined(CONFIG_SOC_SERIES_STM32F0X) || \
 	defined(CONFIG_SOC_SERIES_STM32L0X)
@@ -531,8 +548,21 @@ static int start_read(const struct device *dev,
 	defined(CONFIG_SOC_SERIES_STM32WLX)
 	/* STM32G0 in "not fully configurable" sequencer mode */
 	LL_ADC_REG_SetSequencerChannels(adc, channel);
+	LL_ADC_REG_SetSequencerConfigurable(adc, LL_ADC_REG_SEQ_CONFIGURABLE);
 	while (LL_ADC_IsActiveFlag_CCRDY(adc) == 0) {
 	}
+	LL_ADC_ClearFlag_CCRDY(adc);
+
+#if defined(CONFIG_SOC_SERIES_STM32WLX)
+	/* Init the the ADC group for REGULAR conversion*/
+	LL_ADC_REG_SetTriggerSource(adc,LL_ADC_REG_TRIG_SOFTWARE);
+	LL_ADC_REG_SetSequencerLength(adc, LL_ADC_REG_SEQ_SCAN_DISABLE);
+	LL_ADC_REG_SetSequencerDiscont(adc, LL_ADC_REG_SEQ_DISCONT_DISABLE);
+	LL_ADC_REG_SetContinuousMode(adc, LL_ADC_REG_CONV_SINGLE);
+	LL_ADC_REG_SetOverrun(adc, LL_ADC_REG_OVR_DATA_OVERWRITTEN);
+	LL_ADC_REG_SetSequencerRanks(adc, LL_ADC_REG_RANK_1, channel);
+#endif /* CONFIG_SOC_SERIES_STM32WLX */
+
 #else
 	LL_ADC_REG_SetSequencerRanks(adc, table_rank[0], channel);
 	LL_ADC_REG_SetSequencerLength(adc, table_seq_len[0]);
@@ -928,6 +958,7 @@ static int adc_stm32_init(const struct device *dev)
 #if defined(CONFIG_SOC_SERIES_STM32U5X)
 	/* Enable the independent analog supply */
 	LL_PWR_EnableVDDA();
+	LL_PWR_EnableVDDIO2();
 #endif /* CONFIG_SOC_SERIES_STM32U5X */
 
 #if defined(CONFIG_SOC_SERIES_STM32L4X) || \
