@@ -88,7 +88,18 @@ static int stm32_temp_channel_get(const struct device *dev, enum sensor_channel 
 	}
 
 #if HAS_CALIBRATION
-#if defined(CONFIG_SOC_SERIES_STM32U5X)
+#if defined(CONFIG_SOC_SERIES_STM32H7X)
+	temp = ((float)data->raw * cfg->tsv_mv) / cfg->cal_vrefanalog;
+	/*
+	 * TS_CAL are 16bit values (cf Data Sheet), they are divided to match the 12bit
+	 * resolution of the data_raw.
+	 * The 12bit resolution is set by the asp.resolution in stm32_temp_init()
+	 */
+	temp -= (*cfg->cal1_addr >> 4);
+	temp *= cfg->cal2_temp - cfg->cal1_temp;
+	temp /= (*cfg->cal2_addr >> 4) - (*cfg->cal1_addr >> 4);
+	temp += cfg->cal_offset;
+#elif defined(CONFIG_SOC_SERIES_STM32U5X)
 	/*
 	 * TS_CAL are 14bit values (cf Data Sheet), they are divided to match the 12bit
 	 * resolution of the data_raw.
