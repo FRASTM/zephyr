@@ -64,3 +64,13 @@
 &gpdma1 {
 	status = "okay";
 };
+
+&rcc {
+	apb2-prescaler = <2>;
+};
+
+&spi1 {
+	pinctrl-0 = <&spi1_sck_pe13 &spi1_miso_pe14 &spi1_mosi_pe15>;
+	cs-gpios = <&gpioe 12 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+	status = "okay";
+};
