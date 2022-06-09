@@ -8,5 +8,6 @@ toolchain:
 supported:
   - gpio
   - dma
+  - spi
 ram: 786
 flash: 2048

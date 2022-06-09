@@ -154,6 +154,8 @@ The Zephyr nucleo_u575zi_q board configuration supports the following hardware f
 +-----------+------------+-------------------------------------+
 | GPIO      | on-chip    | gpio                                |
 +-----------+------------+-------------------------------------+
+| SPI       | on-chip    | spi                                 |
++-----------+------------+-------------------------------------+
 
 
 Other hardware features are not yet supported on this Zephyr port.
@@ -179,6 +181,7 @@ Default Zephyr Peripheral Mapping:
 - LD1 : PC7
 - LD2 : PB7
 - LD3 : PG2
+- SPI1 NSS/SCK/MISO/MOSI : PD14/PA5/PA6/PA7 (Arduino SPI)
 
 System Clock
 ------------

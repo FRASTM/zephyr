@@ -27,6 +27,10 @@
 	};
 };
 
+&rcc {
+	apb2-prescaler = <2>;
+};
+
 &usart1 {
 	pinctrl-0 = <&usart1_tx_pa9 &usart1_rx_pa10>;
 	pinctrl-names = "default";
@@ -35,5 +39,12 @@
 };
 
 &gpdma1 {
+	status = "okay";
+};
+
+&spi1 {
+	pinctrl-0 = <&spi1_sck_pa5 &spi1_miso_pa6 &spi1_mosi_pa7>;
+	cs-gpios = <&gpiod 14 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+	pinctrl-names = "default";
 	status = "okay";
 };
