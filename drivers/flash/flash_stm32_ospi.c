@@ -56,6 +56,9 @@ struct flash_stm32_ospi_config {
 #if STM32_OSPI_RESET_GPIO
 	const struct gpio_dt_spec reset;
 #endif /* STM32_OSPI_RESET_GPIO */
+#if DT_NODE_HAS_PROP(DT_INST(0, st_stm32_ospi_nor), jedec_id)
+	uint8_t jedec_id[DT_INST_PROP_LEN(0, jedec_id)];
+#endif /* jedec_id */
 #if DT_NODE_HAS_PROP(DT_INST(0, st_stm32_ospi_nor), sfdp_bfp)
 	uint8_t sfdp_bfp[DT_INST_PROP_LEN(0, sfdp_bfp)];
 #endif /* sfdp_bfp */
@@ -240,6 +243,65 @@ static OSPI_RegularCmdTypeDef ospi_prepare_cmd(uint8_t transfer_mode, uint8_t tr
 	}
 
 	return cmd_tmp;
+}
+
+/*
+ * Read Serial Flash ID :
+ * perform a read access over SPI bus for read Identification (DataMode is already set)
+ * and compare to the jedec-id from the DTYS table exists
+ */
+static int ospi_read_jedec_id(const struct device *dev,  uint8_t *id)
+{
+#if DT_NODE_HAS_PROP(DT_INST(0, st_stm32_ospi_nor), jedec_id)
+	const struct flash_stm32_ospi_config *dev_cfg = dev->config;
+#endif /* jedec_id */
+	struct flash_stm32_ospi_data *dev_data = dev->data;
+	uint8_t data[JESD216_READ_ID_LEN]; /* data received from the octoflash */
+
+	/* This is a SPI/STR command to issue to the octoFlash device */
+	OSPI_RegularCmdTypeDef cmd = ospi_prepare_cmd(OSPI_SPI_MODE, OSPI_STR_TRANSFER);
+
+	cmd.Instruction = JESD216_CMD_READ_ID;
+	cmd.DummyCycles = 8U;
+	cmd.AddressSize = HAL_OSPI_ADDRESS_NONE;
+	cmd.NbData = JESD216_READ_ID_LEN; /* 3 bytes in the READ ID */
+
+	HAL_StatusTypeDef hal_ret;
+
+	hal_ret = HAL_OSPI_Command(&dev_data->hospi, &cmd, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
+
+	if (hal_ret != HAL_OK) {
+		LOG_ERR("%d: Failed to send OSPI instruction", hal_ret);
+		return -EIO;
+	}
+
+	hal_ret = HAL_OSPI_Receive(&dev_data->hospi, data, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
+	if (hal_ret != HAL_OK) {
+		LOG_ERR("%d: Failed to read data", hal_ret);
+		return -EIO;
+	}
+
+	/*
+	 * ReadID data received from the octoflash is now compared
+	 * to the jedec-id values from the DTS (if defined)
+	 */
+#if DT_NODE_HAS_PROP(DT_INST(0, st_stm32_ospi_nor), jedec_id)
+	if ((data[1] != dev_cfg->jedec_id[0]) &&  /* manufacturer ID */
+		(data[2] != dev_cfg->jedec_id[1]) &&  /* memory Type */
+		(data[0] != dev_cfg->jedec_id[2])) /* memory Density */ {
+
+		LOG_ERR("Device id %02x %02x %02x does not match config %02x %02x %02x",
+			data[1], data[2], data[0],
+			dev_cfg->jedec_id[0], dev_cfg->jedec_id[1], dev_cfg->jedec_id[2]);
+		return -EINVAL;
+	}
+	LOG_INF("Manuf ID = %02x   Memory Type = %02x   Memory Density = %02x",
+		data[0], data[1], data[2]);
+#endif /* jedec_id */
+	dev_data->cmd_status = 0;
+	id = &data[0];
+
+	return 0;
 }
 
 /*
@@ -1178,6 +1240,9 @@ static const struct flash_driver_api flash_stm32_ospi_driver_api = {
 #if defined(CONFIG_FLASH_PAGE_LAYOUT)
 	.page_layout = flash_stm32_ospi_pages_layout,
 #endif
+#if defined(CONFIG_FLASH_JESD216_API)
+	.read_jedec_id = ospi_read_jedec_id,
+#endif /* CONFIG_FLASH_JESD216_API */
 };
 
 #if defined(CONFIG_FLASH_PAGE_LAYOUT)
@@ -1697,6 +1762,14 @@ static int flash_stm32_ospi_init(const struct device *dev)
 		return -EIO;
 	}
 
+	uint8_t jedec_id[JESD216_READ_ID_LEN];
+	/* Process with the RDID (jedec read ID) the instruction */
+	ret = ospi_read_jedec_id(dev, jedec_id);
+	if (ret != 0) {
+		LOG_ERR("Read ID failed: %d", ret);
+		return ret;
+	}
+
 	if (stm32_ospi_config_mem(dev) != 0) {
 		LOG_ERR("OSPI mode not config'd (%u rate %u)",
 			dev_cfg->data_mode, dev_cfg->data_rate);
@@ -1813,9 +1886,9 @@ static const struct flash_stm32_ospi_config flash_stm32_ospi_cfg = {
 #if STM32_OSPI_RESET_GPIO
 	.reset = GPIO_DT_SPEC_INST_GET(0, reset_gpios),
 #endif /* STM32_OSPI_RESET_GPIO */
-#if DT_NODE_HAS_PROP(DT_INST(0, st_stm32_ospi_nor), sfdp_bfp)
-	.sfdp_bfp = DT_INST_PROP(0, sfdp_bfp),
-#endif /* sfdp_bfp */
+#if DT_NODE_HAS_PROP(DT_INST(0, st_stm32_ospi_nor), jedec_id)
+	.jedec_id = DT_INST_PROP(0, jedec_id),
+#endif /* jedec_id */
 };
 
 static struct flash_stm32_ospi_data flash_stm32_ospi_dev_data = {

@@ -14,6 +14,7 @@
 
 /* JEDEC Read identification */
 #define JESD216_CMD_READ_ID   0x9F
+#define JESD216_OCMD_READ_ID  0x9F60
 #define JESD216_READ_ID_LEN   3
 
 /* Following are structures and constants supporting the JEDEC Serial
