@@ -309,19 +309,15 @@ static int ospi_read_jedec_id(const struct device *dev,  uint8_t *id)
  * perform a read access over SPI bus for SDFP (DataMode is already set)
  * or get it from the sdfp table (in the DTS)
  */
-static int ospi_read_sfdp(const struct device *dev, off_t addr, uint8_t *data,
+static int ospi_read_sfdp(const struct device *dev, off_t addr, void *data,
 			  size_t size)
 {
 	const struct flash_stm32_ospi_config *dev_cfg = dev->config;
 	struct flash_stm32_ospi_data *dev_data = dev->data;
 
 #if DT_NODE_HAS_PROP(DT_INST(0, st_stm32_ospi_nor), sfdp_bfp)
-	/* simulate the SDFP */
-	ARG_UNUSED(addr); /* addr is 0 */
-
-	for (uint8_t i_ind = 0; i_ind < ARRAY_SIZE(dev_cfg->sfdp_bfp); i_ind++) {
-		*(data + i_ind) = dev_cfg->sfdp_bfp[i_ind];
-	}
+	/* simulate the SDFP data from the DTS */
+	memcpy((uint8_t *)data, (dev_cfg->sfdp_bfp + addr), size);
 #else /* sfdp_bfp */
 
 	OSPI_RegularCmdTypeDef cmd = ospi_prepare_cmd(dev_cfg->data_mode,
@@ -349,7 +345,7 @@ static int ospi_read_sfdp(const struct device *dev, off_t addr, uint8_t *data,
 		return -EIO;
 	}
 
-	hal_ret = HAL_OSPI_Receive(&dev_data->hospi, data, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
+	hal_ret = HAL_OSPI_Receive(&dev_data->hospi, (uint8_t *)data, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
 	if (hal_ret != HAL_OK) {
 		LOG_ERR("%d: Failed to read data", hal_ret);
 		return -EIO;
@@ -1241,6 +1237,7 @@ static const struct flash_driver_api flash_stm32_ospi_driver_api = {
 	.page_layout = flash_stm32_ospi_pages_layout,
 #endif
 #if defined(CONFIG_FLASH_JESD216_API)
+	.sfdp_read = ospi_read_sfdp,
 	.read_jedec_id = ospi_read_jedec_id,
 #endif /* CONFIG_FLASH_JESD216_API */
 };
@@ -1889,6 +1886,9 @@ static const struct flash_stm32_ospi_config flash_stm32_ospi_cfg = {
 #if DT_NODE_HAS_PROP(DT_INST(0, st_stm32_ospi_nor), jedec_id)
 	.jedec_id = DT_INST_PROP(0, jedec_id),
 #endif /* jedec_id */
+#if DT_NODE_HAS_PROP(DT_INST(0, st_stm32_ospi_nor), sfdp_bfp)
+	.sfdp_bfp = DT_INST_PROP(0, sfdp_bfp),
+#endif /* sfdp_bfp */
 };
 
 static struct flash_stm32_ospi_data flash_stm32_ospi_dev_data = {
