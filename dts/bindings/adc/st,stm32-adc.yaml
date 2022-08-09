@@ -21,6 +21,22 @@ properties:
     "#io-channel-cells":
       const: 1
 
+    st,adc-prescaler:
+      required: false
+      type: array
+      description: |
+        The ADC Clock specifier at the input of the peripheral.
+        On some series, it could be either ASYNChronous (derived from the domain clock)
+        or SYNChronous (derived from the AHB or APB).
+        In each case, a specific prescaler can be applied to reduce the input frequency.
+        It is combined to the st,prescaler to define the exact ADC clock freq.
+        Refer to the RefMan to know the possible schemes.
+        The property must have two integer elements:
+        - first:  SYNC or ASYNC to select synchronous or asynchronous specific clock
+        - second: divider which is an integer from 1 to 256
+        (some stm32 may have only limited nb of divider. For example on stm32F2 :
+        SYNC of 4 (possibly 2, 4, 6, 8) will give st,prescaler = <SYNC 4>;
+
     pinctrl-0:
       required: true
 
