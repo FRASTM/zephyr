@@ -1304,6 +1304,20 @@ static const struct adc_driver_api api_stm32_driver_api = {
 #define STM32_ADC_CLOCK(x)	DT_INST_PROP_BY_IDX(x, st_adc_prescaler, 0)
 #define STM32_ADC_DIV(x)	DT_INST_PROP_BY_IDX(x, st_adc_prescaler, 1)
 
+/*
+ * Macro to check the property is valid with two elements:
+ * 1st one is SYNC or ASYNC
+ * 2nd one for the divider
+ */
+#define ADC_STM32_CHECK_PRESC(x)							\
+	IF_ENABLED(DT_INST_NODE_HAS_PROP(x, st_adc_prescaler),				\
+			(BUILD_ASSERT((DT_INST_PROP_LEN(x, st_adc_prescaler) == 2),	\
+				"Invalid ADC st_adc_prescaler property length");	\
+			BUILD_ASSERT(							\
+				(STM32_ADC_CLOCK(x) == SYNC) ||				\
+				(STM32_ADC_CLOCK(x) == ASYNC),				\
+				"Invalid ADC st_adc_prescaler property");))
+
 /* Macro to set the prefix depending on the 1st element: check if it is SYNC or ASYNC */
 #define STM32_ADC_PREFIX(x)				\
 	COND_CODE_1(IS_EQ(STM32_ADC_CLOCK(x), SYNC),	\
@@ -1403,6 +1417,8 @@ static const struct adc_stm32_cfg adc_stm32_cfg_##index = {		\
 #define STM32_ADC_INIT(index)						\
 									\
 PINCTRL_DT_INST_DEFINE(index);						\
+									\
+ADC_STM32_CHECK_PRESC(index)						\
 									\
 ADC_STM32_CONFIG(index)							\
 									\
