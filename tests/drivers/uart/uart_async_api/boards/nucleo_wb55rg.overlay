@@ -1,0 +1,36 @@
+/*
+ * Copyright (c) 2022 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+
+&clk_hsi {
+	status = "okay";
+};
+
+&lpuart1 {
+	dmas = <&dmamux1 11 17 0x20440
+		&dmamux1 1 16 0x20480>;
+	dma-names = "tx", "rx";
+
+	/delete-property/ hw-flow-control;
+
+	/delete-property/ clock;
+	clocks = <&rcc STM32_CLOCK_BUS_APB1_2 0x00000001>,
+		 <&rcc STM32_SRC_HSI LPUART1_SEL(2)>;
+
+	wakeup-source;
+};
+
+&dma1 {
+	status = "okay";
+};
+
+&dma2 {
+	status = "okay";
+};
+
+&dmamux1 {
+	status = "okay";
+};
