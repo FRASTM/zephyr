@@ -1063,12 +1063,20 @@ static inline void uart_stm32_dma_tx_enable(const struct device *dev)
 {
 	const struct uart_stm32_config *config = dev->config;
 
+#ifdef CONFIG_PM
+	uart_stm32_pm_policy_state_lock_get(dev);
+#endif /* CONFIG_PM */
+
 	LL_USART_EnableDMAReq_TX(config->usart);
 }
 
 static inline void uart_stm32_dma_tx_disable(const struct device *dev)
 {
 	const struct uart_stm32_config *config = dev->config;
+
+#ifdef CONFIG_PM
+	uart_stm32_pm_policy_state_lock_put(dev);
+#endif /* CONFIG_PM */
 
 	LL_USART_DisableDMAReq_TX(config->usart);
 }
@@ -1078,6 +1086,10 @@ static inline void uart_stm32_dma_rx_enable(const struct device *dev)
 	const struct uart_stm32_config *config = dev->config;
 	struct uart_stm32_data *data = dev->data;
 
+#ifdef CONFIG_PM
+	uart_stm32_pm_policy_state_lock_get(dev);
+#endif /* CONFIG_PM */
+
 	LL_USART_EnableDMAReq_RX(config->usart);
 
 	data->dma_rx.enabled = true;
@@ -1086,6 +1098,10 @@ static inline void uart_stm32_dma_rx_enable(const struct device *dev)
 static inline void uart_stm32_dma_rx_disable(const struct device *dev)
 {
 	struct uart_stm32_data *data = dev->data;
+
+#ifdef CONFIG_PM
+	uart_stm32_pm_policy_state_lock_put(dev);
+#endif /* CONFIG_PM */
 
 	data->dma_rx.enabled = false;
 }
@@ -1240,7 +1256,10 @@ static int uart_stm32_async_tx(const struct device *dev,
 	data->dma_tx.timeout = timeout;
 
 	LOG_DBG("tx: l=%d", data->dma_tx.buffer_length);
-
+#ifdef CONFIG_PM
+	data->pm_policy_state_on = false;
+	uart_stm32_pm_policy_state_lock_get(dev);
+#endif /* CONFIG_PM */
 	/* Clear TC flag */
 	LL_USART_ClearFlag_TC(config->usart);
 
@@ -1264,14 +1283,13 @@ static int uart_stm32_async_tx(const struct device *dev,
 		return -EFAULT;
 	}
 
-	/* Start TX timer */
-	async_timer_start(&data->dma_tx.timeout_work, data->dma_tx.timeout);
-
 #ifdef CONFIG_PM
-
 	/* Do not allow system to suspend until transmission has completed */
 	uart_stm32_pm_policy_state_lock_get(dev);
 #endif
+
+	/* Start TX timer */
+	async_timer_start(&data->dma_tx.timeout_work, data->dma_tx.timeout);
 
 	/* Enable TX DMA requests */
 	uart_stm32_dma_tx_enable(dev);
@@ -1300,6 +1318,10 @@ static int uart_stm32_async_rx_enable(const struct device *dev,
 	data->dma_rx.buffer_length = buf_size;
 	data->dma_rx.counter = 0;
 	data->dma_rx.timeout = timeout;
+
+#ifdef CONFIG_PM
+	uart_stm32_pm_policy_state_lock_get(dev);
+#endif /* CONFIG_PM */
 
 	/* Disable RX interrupts to let DMA to handle it */
 	LL_USART_DisableIT_RXNE(config->usart);
@@ -1424,6 +1446,9 @@ static int uart_stm32_async_init(const struct device *dev)
 		}
 	}
 
+#ifdef CONFIG_PM
+	data->pm_policy_state_on = false;
+#endif
 	/* Disable both TX and RX DMA requests */
 	uart_stm32_dma_rx_disable(dev);
 	uart_stm32_dma_tx_disable(dev);
