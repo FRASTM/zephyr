@@ -1694,6 +1694,10 @@ static int uart_stm32_init(const struct device *dev)
 		 * CONFIG_PM_DEVICE=y : Controlled by pm_device_wakeup_enable()
 		 */
 		LL_USART_EnableInStopMode(config->usart);
+#if defined(CONFIG_SOC_SERIES_STM32WLX)
+		/* Prepare the WAKEUP with all the expected EXTI line */
+		LL_EXTI_EnableIT_0_31(LL_EXTI_LINE_26 | LL_EXTI_LINE_27 | LL_EXTI_LINE_28);
+#endif /* CONFIG_SOC_SERIES_STM32WLX */
 	}
 #endif /* CONFIG_PM */
 
