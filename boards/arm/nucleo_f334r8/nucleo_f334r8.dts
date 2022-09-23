@@ -109,6 +109,17 @@
 	};
 };
 
+&adc1{
+	pinctrl-0 = <&adc1_in1_pa0>;
+	pinctrl-names = "default";
+	vref-mv = <3300>;
+	status = "okay";
+};
+
+&die_temp {
+	status = "okay";
+};
+
 &rtc {
 	status = "okay";
 };
