@@ -397,6 +397,9 @@ static void set_regu_voltage(uint32_t hclk_freq)
  */
 static void set_epod_booster(void)
 {
+	/* Reset Epod Prescaler in case it was set earlier with another DIV value */
+	LL_RCC_SetPll1EPodPrescaler(LL_RCC_PLL1MBOOST_DIV_1);
+
 	if (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC >= 55) {
 		/*
 		 * Set EPOD clock prescaler based on PLL1 input freq (MSI/PLLM)
@@ -466,8 +469,6 @@ static int set_up_plls(void)
 		/* Main PLL configuration and activation */
 		LL_RCC_PLL1_SetMainSource(LL_RCC_PLL1SOURCE_HSE);
 	} else if (IS_ENABLED(STM32_PLL_SRC_MSIS)) {
-		/* Configure the EPOD booster before increasing the system clock freq */
-		set_epod_booster();
 		/* Main PLL configuration and activation */
 		LL_RCC_PLL1_SetMainSource(LL_RCC_PLL1SOURCE_MSIS);
 	} else if (IS_ENABLED(STM32_PLL_SRC_HSI)) {
@@ -481,6 +482,15 @@ static int set_up_plls(void)
 	if (r < 0) {
 		return r;
 	}
+
+	/*
+	 * Configure the EPOD booster before increasing the system clock freq
+	 * Actually, only when MSIS is the PLL clock source, will the epod prescaler
+	 * be configured with a DIV value > 0.
+	 * However, there is a reset to default before calculating the new divider
+	 * for the EPOD clock.
+	 */
+	set_epod_booster();
 
 	LL_RCC_PLL1_SetDivider(STM32_PLL_M_DIVISOR);
 
