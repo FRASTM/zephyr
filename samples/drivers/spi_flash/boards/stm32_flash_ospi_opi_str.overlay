@@ -1,0 +1,10 @@
+/*
+ * Copyright (c) 2022, STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&mx25lm51245 {
+        /delete-property/ data-rate;
+	data-rate = <OSPI_STR_TRANSFER>;
+};
