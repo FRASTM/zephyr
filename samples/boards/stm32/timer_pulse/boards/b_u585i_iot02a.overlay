@@ -1,0 +1,33 @@
+
+&timers2 {
+	st,prescaler = <159>;
+
+	counter {
+		compatible = "st,stm32-counter";
+		label = "Counter";
+		status = "okay";
+	};
+};
+
+&rtc {
+	/delete-property/ clocks;
+        status = "okay";
+        clocks = <&rcc STM32_CLOCK_BUS_APB3 0x00200000>,
+                <&rcc STM32_SRC_LSE RTC_SEL(1)>;
+        label = "rtc";
+};
+
+/ {
+    aliases {
+	pulse = &pulse_signal;
+    };
+
+    gpio_keys {
+        compatible = "gpio-keys";
+
+        pulse_signal: pulse_signal {
+                gpios = <&gpiob 6 GPIO_PULL_DOWN>;
+                label = "pulse_signal";
+        };
+    };
+};

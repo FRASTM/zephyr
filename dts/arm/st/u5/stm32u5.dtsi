@@ -361,6 +361,12 @@
 				status = "disabled";
 				#pwm-cells = <3>;
 			};
+
+			counter {
+				compatible = "st,stm32-counter";
+				label = "Counter";
+				status = "disabled";
+			};
 		};
 
 		timers3: timers@40000400 {
