@@ -34,11 +34,13 @@ struct spi_stm32_config {
 
 #ifdef CONFIG_SPI_STM32_DMA
 
+#define SPI_STM32_DMA_ONGOING		0x00
 #define SPI_STM32_DMA_ERROR_FLAG	0x01
 #define SPI_STM32_DMA_RX_DONE_FLAG	0x02
 #define SPI_STM32_DMA_TX_DONE_FLAG	0x04
 #define SPI_STM32_DMA_DONE_FLAG	\
 	(SPI_STM32_DMA_RX_DONE_FLAG | SPI_STM32_DMA_TX_DONE_FLAG)
+#define SPI_STM32_DMA_READY		0x10
 
 #define SPI_STM32_DMA_TX	0x01
 #define SPI_STM32_DMA_RX	0x02
@@ -59,7 +61,7 @@ struct spi_stm32_data {
 	struct spi_context ctx;
 #ifdef CONFIG_SPI_STM32_DMA
 	struct k_sem status_sem;
-	volatile uint32_t status_flags;
+	volatile uint8_t status_flags;
 	struct stream dma_rx;
 	struct stream dma_tx;
 #endif /* CONFIG_SPI_STM32_DMA */

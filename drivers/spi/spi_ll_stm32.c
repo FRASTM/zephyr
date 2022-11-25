@@ -744,8 +744,7 @@ static int transceive_dma(const struct device *dev,
 	LL_SPI_Enable(spi);
 #endif /* st_stm32h7_spi */
 
-	/* This is turned off in spi_stm32_complete(). */
-	spi_stm32_cs_control(dev, true);
+	data->status_flags = SPI_STM32_DMA_READY; /* Starting transfer */
 
 	while (data->ctx.rx_len > 0 || data->ctx.tx_len > 0) {
 		size_t dma_len;
@@ -758,15 +757,20 @@ static int transceive_dma(const struct device *dev,
 			dma_len = MIN(data->ctx.tx_len, data->ctx.rx_len);
 		}
 
-		data->status_flags = 0;
-
 		ret = spi_dma_move_buffers(dev, dma_len);
 		if (ret != 0) {
 			break;
 		}
 
-#if !DT_HAS_COMPAT_STATUS_OKAY(st_stm32h7_spi)
+		if (data->status_flags == SPI_STM32_DMA_READY) {
+			/* Set the cs gpio only once */
+			data->status_flags = SPI_STM32_DMA_ONGOING;
 
+			/* This is turned off in spi_stm32_complete(). */
+			spi_stm32_cs_control(dev, true);
+		}
+
+#if !DT_HAS_COMPAT_STATUS_OKAY(st_stm32h7_spi)
 		/* toggle the DMA request to restart the transfer */
 		LL_SPI_EnableDMAReq_RX(spi);
 		LL_SPI_EnableDMAReq_TX(spi);
