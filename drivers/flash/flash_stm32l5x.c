@@ -20,7 +20,10 @@ LOG_MODULE_REGISTER(LOG_DOMAIN);
 
 #include "flash_stm32.h"
 
-#if defined(CONFIG_SOC_SERIES_STM32L5X)
+#if defined(CONFIG_SOC_SERIES_STM32H5X)
+/* at this time stm32h5 mcus have 128KB (stm32h50x) or 2MB (stm32h56x/57x) */
+#define STM32_SERIES_MAX_FLASH	2048
+#elif defined(CONFIG_SOC_SERIES_STM32L5X)
 #define STM32_SERIES_MAX_FLASH	512
 #elif defined(CONFIG_SOC_SERIES_STM32U5X)
 /* at this time stm32u5 mcus have 1MB (stm32u575) or 2MB (stm32u585) */
