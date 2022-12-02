@@ -301,6 +301,7 @@ static inline uint32_t gpio_stm32_pin_to_exti_line(int pin)
 	return (((pin * 8) % 32) << 16) | (pin / 4);
 #elif defined(CONFIG_SOC_SERIES_STM32C0X) || \
 	defined(CONFIG_SOC_SERIES_STM32G0X) || \
+	defined(CONFIG_SOC_SERIES_STM32H5X) || \
 	defined(CONFIG_SOC_SERIES_STM32L5X) || \
 	defined(CONFIG_SOC_SERIES_STM32U5X)
 	return ((pin & 0x3) << (16 + 3)) | (pin >> 2);
@@ -332,10 +333,12 @@ static void gpio_stm32_set_exti_source(int port, int pin)
 	LL_EXTI_SetEXTISource(port, line);
 #elif defined(CONFIG_SOC_SERIES_STM32C0X) || \
 	defined(CONFIG_SOC_SERIES_STM32G0X) || \
+	defined(CONFIG_SOC_SERIES_STM32H5X) || \
 	defined(CONFIG_SOC_SERIES_STM32L5X) || \
 	defined(CONFIG_SOC_SERIES_STM32U5X)
 	LL_EXTI_SetEXTISource(port, line);
 #else
+
 	LL_SYSCFG_SetEXTISource(port, line);
 #endif
 	z_stm32_hsem_unlock(CFG_HW_EXTI_SEMID);
@@ -352,6 +355,7 @@ static int gpio_stm32_get_exti_source(int pin)
 	port = LL_EXTI_GetEXTISource(line);
 #elif defined(CONFIG_SOC_SERIES_STM32C0X) || \
 	defined(CONFIG_SOC_SERIES_STM32G0X) || \
+	defined(CONFIG_SOC_SERIES_STM32H5X) || \
 	defined(CONFIG_SOC_SERIES_STM32L5X) || \
 	defined(CONFIG_SOC_SERIES_STM32U5X)
 	port = LL_EXTI_GetEXTISource(line);
