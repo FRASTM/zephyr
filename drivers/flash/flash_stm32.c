@@ -379,8 +379,8 @@ static int stm32_flash_init(const struct device *dev)
 
 	flash_stm32_sem_init(dev);
 
-	LOG_DBG("Flash initialized. BS: %zu",
-		flash_stm32_parameters.write_block_size);
+	LOG_DBG("Flash initialized (Total Size = %zu Bytes). BS: %zu",
+		FLASH_SIZE, flash_stm32_parameters.write_block_size);
 
 	/* Check Flash configuration */
 	rc = flash_stm32_check_configuration();
