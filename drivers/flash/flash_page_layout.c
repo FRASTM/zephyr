@@ -23,7 +23,10 @@ static int flash_get_page_info(const struct device *dev, off_t offs,
 
 	while (layout_size--) {
 		info->size = layout->pages_size;
-		if (offs == 0) {
+		if (info->size == 0) {
+			/* Avoid dividing by 0 in the next operation */
+			return -EINVAL;
+		} else if (offs == 0) {
 			index_jmp = index - info->index;
 		} else {
 			index_jmp = (offs - info->start_offset) / info->size;
