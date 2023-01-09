@@ -1,0 +1,35 @@
+&timers2 {
+	status = "okay";
+	st,prescaler = <239>;
+	counter {
+		compatible = "st,stm32-counter";
+		status = "okay";
+	};
+};
+
+&timers3 {
+	status = "okay";
+	st,prescaler = <239>;
+	counter {
+		compatible = "st,stm32-counter";
+		status = "okay";
+	};
+};
+
+&timers6 {
+	status = "okay";
+	st,prescaler = <239>;
+	counter {
+		compatible = "st,stm32-counter";
+		status = "okay";
+	};
+};
+
+&timers7 {
+	st,prescaler = <239>;
+	status = "okay";
+	counter {
+		compatible = "st,stm32-counter";
+		status = "okay";
+	};
+};
