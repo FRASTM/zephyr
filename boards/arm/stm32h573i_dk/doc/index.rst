@@ -80,6 +80,7 @@ They operate at a frequency of up to 240 MHz.
   - True random number generator, NIST SP800-90B compliant
   - 96-bit unique ID
   - Active tampers
+  - True Random Number Generator (RNG) NIST SP800-90B compliant
 
 - Clock management:
 
@@ -169,8 +170,20 @@ hardware features:
 +-----------+------------+-------------------------------------+
 | PINMUX    | on-chip    | pinmux                              |
 +-----------+------------+-------------------------------------+
+| RNG       | on-chip    | True Random number generator        |
++-----------+------------+-------------------------------------+
+| I2C       | on-chip    | i2c                                 |
++-----------+------------+-------------------------------------+
 | UART      | on-chip    | serial port-polling;                |
 |           |            | serial port-interrupt               |
++-----------+------------+-------------------------------------+
+| DAC       | on-chip    | DAC Controller                      |
++-----------+------------+-------------------------------------+
+| ADC       | on-chip    | ADC Controller                      |
++-----------+------------+-------------------------------------+
+| WATCHDOG  | on-chip    | independent watchdog                |
++-----------+------------+-------------------------------------+
+| SPI       | on-chip    | spi                                 |
 +-----------+------------+-------------------------------------+
 
 Other hardware features are not yet supported on this Zephyr port.
@@ -219,7 +232,11 @@ Default Zephyr Peripheral Mapping:
 - USART_1 TX/RX : PA9/PA10 (VCP)
 - USER_PB : PC13
 - LD1 (green) : PI9
-
+- DAC1 channel 1 output : PA4
+- ADC1 channel 6 input : PF12
+- SPI2 NSS/SCK/MISO/MOSI : D10/D13/D12/D11 (Arduino SPI)
+- I2C_1 SDA/SCL : PB7/PB6 (Arduino I2C)
+- I2C_2 SDA/SCL : PB11/PB10  (Arduino USART3 pins)
 
 System Clock
 ------------

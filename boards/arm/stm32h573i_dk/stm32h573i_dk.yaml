@@ -10,3 +10,9 @@ supported:
   - arduino_gpio
   - gpio
   - uart
+  - dac
+  - adc
+  - watchdog
+  - entropy
+  - spi
+  - i2c
