@@ -40,6 +40,18 @@ properties:
   usbpre:
     type: boolean
     description: |
-        Otpional PLL output divisor to generate a 48MHz USB clock.
+        Optional PLL output divisor to generate a 48MHz USB clock.
         When set, PLL clock is not divided.
         Otherwise, PLL output clock is divided by 1.5.
+
+  adcpre:
+    type: int
+    enum:
+      - 2
+      - 4
+      - 6
+      - 8
+    description: |
+        Optional PCLK2 output divisor to generate a 14MHz MAX ADCs clock.
+        PCLK2 is the APB2 bus clock (HCLK after the APB2 prescaler).
+        If not set, the PCLK2 is divided by 2 PLL (default at reset)
