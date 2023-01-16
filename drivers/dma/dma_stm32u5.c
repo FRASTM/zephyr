@@ -24,9 +24,13 @@ LOG_MODULE_REGISTER(dma_stm32, CONFIG_DMA_LOG_LEVEL);
 
 #define DT_DRV_COMPAT st_stm32u5_dma
 
-/* STM32U5 soc has only one GPDMA instance of 15 channels */
+/* STM32U5 soc has only one GPDMA instance of 16 channels */
 #if DT_NODE_HAS_STATUS(DT_DRV_INST(0), okay)
-#define DMA_STM32_0_STREAM_COUNT 16
+#define DMA_STM32_0_STREAM_COUNT DT_INST_PROP(0, dma_channels)
+#endif /* DT_NODE_HAS_STATUS(DT_DRV_INST(0), okay) */
+
+#if DT_NODE_HAS_STATUS(DT_DRV_INST(0), okay)
+#define DMA_STM32_0_STREAM_COUNT DT_INST_PROP(0, dma_channels)
 #endif /* DT_NODE_HAS_STATUS(DT_DRV_INST(0), okay) */
 
 static const uint32_t table_m_size[] = {
@@ -745,7 +749,7 @@ static void dma_stm32_irq_##dma##_##chan(const struct device *dev)	\
 		irq_enable(DT_INST_IRQ_BY_IDX(dma, chan, irq));		\
 	} while (0)
 
-/* STM32U5 soc has only one GPDMA instance of 15 channels */
+/* STM32U5 soc has only one GPDMA instance of 16 channels */
 #if DT_NODE_HAS_STATUS(DT_DRV_INST(0), okay)
 
 DMA_STM32_DEFINE_IRQ_HANDLER(0, 0);
@@ -756,6 +760,7 @@ DMA_STM32_DEFINE_IRQ_HANDLER(0, 4);
 DMA_STM32_DEFINE_IRQ_HANDLER(0, 5);
 DMA_STM32_DEFINE_IRQ_HANDLER(0, 6);
 DMA_STM32_DEFINE_IRQ_HANDLER(0, 7);
+#if (DT_INST_PROP(DT_DRV_INST(0), dma_channels) == 16)
 DMA_STM32_DEFINE_IRQ_HANDLER(0, 8);
 DMA_STM32_DEFINE_IRQ_HANDLER(0, 9);
 DMA_STM32_DEFINE_IRQ_HANDLER(0, 10);
@@ -764,6 +769,7 @@ DMA_STM32_DEFINE_IRQ_HANDLER(0, 12);
 DMA_STM32_DEFINE_IRQ_HANDLER(0, 13);
 DMA_STM32_DEFINE_IRQ_HANDLER(0, 14);
 DMA_STM32_DEFINE_IRQ_HANDLER(0, 15);
+#endif
 
 static void dma_stm32_config_irq_0(const struct device *dev)
 {
@@ -777,6 +783,7 @@ static void dma_stm32_config_irq_0(const struct device *dev)
 	DMA_STM32_IRQ_CONNECT(0, 5);
 	DMA_STM32_IRQ_CONNECT(0, 6);
 	DMA_STM32_IRQ_CONNECT(0, 7);
+#if (DT_INST_PROP(DT_DRV_INST(0), dma_channels) == 16)
 	DMA_STM32_IRQ_CONNECT(0, 8);
 	DMA_STM32_IRQ_CONNECT(0, 9);
 	DMA_STM32_IRQ_CONNECT(0, 10);
@@ -785,6 +792,7 @@ static void dma_stm32_config_irq_0(const struct device *dev)
 	DMA_STM32_IRQ_CONNECT(0, 13);
 	DMA_STM32_IRQ_CONNECT(0, 14);
 	DMA_STM32_IRQ_CONNECT(0, 15);
+#endif
 }
 
 DMA_STM32_INIT_DEV(0);
