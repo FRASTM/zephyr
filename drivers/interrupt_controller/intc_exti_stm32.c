@@ -98,6 +98,7 @@ static inline int stm32_exti_is_pending(int line)
 	defined(CONFIG_SOC_SERIES_STM32C0X) || \
 	defined(CONFIG_SOC_SERIES_STM32G0X) || \
 	defined(CONFIG_SOC_SERIES_STM32L5X) || \
+	defined(CONFIG_SOC_SERIES_STM32H5X) || \
 	defined(CONFIG_SOC_SERIES_STM32U5X)
 		return (LL_EXTI_IsActiveRisingFlag_0_31(1 << line) ||
 			LL_EXTI_IsActiveFallingFlag_0_31(1 << line));
@@ -124,6 +125,7 @@ static inline void stm32_exti_clear_pending(int line)
 	defined(CONFIG_SOC_SERIES_STM32C0X) || \
 	defined(CONFIG_SOC_SERIES_STM32G0X) || \
 	defined(CONFIG_SOC_SERIES_STM32L5X) || \
+	defined(CONFIG_SOC_SERIES_STM32H5X) || \
 	defined(CONFIG_SOC_SERIES_STM32U5X)
 		LL_EXTI_ClearRisingFlag_0_31(1 << line);
 		LL_EXTI_ClearFallingFlag_0_31(1 << line);
