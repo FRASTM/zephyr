@@ -74,6 +74,19 @@ static uint32_t get_pllsrc_frequency(size_t pll_id)
 
 static uint32_t get_startup_frequency(void)
 {
+
+	if (IS_ENABLED(STM32_HSI_ENABLED)) {
+		while (LL_RCC_HSI_IsReady() != 1) {
+		/* Wait for HSI ready */
+		}
+	}
+
+	if (IS_ENABLED(STM32_MSIS_ENABLED)) {
+		while (LL_RCC_MSI_IsReady() != 1) {
+		/* Wait for MSI ready */
+		}
+	}
+
 	switch (LL_RCC_GetSysClkSource()) {
 	case LL_RCC_SYS_CLKSOURCE_STATUS_MSIS:
 		return get_msis_frequency();
