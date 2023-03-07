@@ -74,7 +74,8 @@ static uint32_t get_pllsrc_frequency(size_t pll_id)
 
 static uint32_t get_startup_frequency(void)
 {
-
+#if 0
+// #ifdef CONFIG_PM
 	if (IS_ENABLED(STM32_HSI_ENABLED)) {
 		while (LL_RCC_HSI_IsReady() != 1) {
 		/* Wait for HSI ready */
@@ -86,12 +87,22 @@ static uint32_t get_startup_frequency(void)
 		/* Wait for MSI ready */
 		}
 	}
-
+#endif
 	switch (LL_RCC_GetSysClkSource()) {
 	case LL_RCC_SYS_CLKSOURCE_STATUS_MSIS:
 		return get_msis_frequency();
 	case LL_RCC_SYS_CLKSOURCE_STATUS_HSI:
 		return STM32_HSI_FREQ;
+	case LL_RCC_SYS_CLKSOURCE_STATUS_HSE:
+		return STM32_HSE_FREQ;
+	case LL_RCC_SYS_CLKSOURCE_STATUS_PLL1:
+// 		__ASSERT(0, "PLL1 startup freq");
+
+		return __LL_RCC_CALC_PLL1CLK_FREQ(get_pllsrc_frequency(PLL1_ID),
+					      STM32_PLL_M_DIVISOR,
+					      STM32_PLL_N_MULTIPLIER,
+					      STM32_PLL_R_DIVISOR);
+;
 	default:
 		__ASSERT(0, "Unexpected startup freq");
 		return 0;
