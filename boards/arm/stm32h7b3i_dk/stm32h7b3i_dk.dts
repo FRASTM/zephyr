@@ -64,6 +64,7 @@
 		led1 = &red_led;
 		sw0 = &user_button;
 		kscan0 = &touch_controller;
+		spi-flash0 = &mx25lm51245;
 	};
 };
 
@@ -245,17 +246,11 @@
 		compatible = "st,stm32-ospi-nor";
 		reg = <0>;
 		ospi-max-frequency = <DT_FREQ_M(50)>;
-		size = <DT_SIZE_M(512)>; /* 512 Megabits */
+		size = <DT_SIZE_M(64)>; /* 512 Megabits */
 		spi-bus-width = <OSPI_OPI_MODE>;
 		data-rate = <OSPI_DTR_TRANSFER>;
 		status = "okay";
-		sfdp-bfp = [
-			53 46 44 50 06 01 02 ff
-			00 06 01 10 30 00 00 ff
-			C2 00 01 04 10 01 00 ff
-			84 00 01 02 C0 00 00 ff
-			00 00 00 00
-		];
+
 
 		partitions {
 			   compatible = "fixed-partitions";
@@ -264,7 +259,7 @@
 
 			   partition@0 {
 			       label = "nor";
-			       reg = <0x00000000 DT_SIZE_M(4)>;
+			       reg = <0x00000000 DT_SIZE_M(64)>;
 			   };
 		};
 	};
