@@ -34,7 +34,9 @@ LOG_MODULE_REGISTER(flash_stm32_ospi, CONFIG_FLASH_LOG_LEVEL);
 #if STM32_OSPI_USE_DMA
 #include <zephyr/drivers/dma/dma_stm32.h>
 #include <zephyr/drivers/dma.h>
-#include <stm32_ll_dma.h>
+#if defined(CONFIG_DMA_STM32_MDMA)
+#include <stm32_ll_mdma.h>
+#endif /* CONFIG_DMA_STM32_MDMA */
 #endif /* STM32_OSPI_USE_DMA */
 
 #define STM32_OSPI_FIFO_THRESHOLD         4
@@ -70,6 +72,14 @@ static const uint32_t table_priority[] = {
 	LL_DMA_LOW_PRIORITY_MID_WEIGHT,
 	LL_DMA_LOW_PRIORITY_HIGH_WEIGHT,
 	LL_DMA_HIGH_PRIORITY,
+};
+#elif CONFIG_DMA_STM32_MDMA
+/* Lookup table to set dma priority from the DTS */
+static const uint32_t table_priority[] = {
+	MDMA_PRIORITY_LOW,
+	MDMA_PRIORITY_MEDIUM,
+	MDMA_PRIORITY_HIGH,
+	MDMA_PRIORITY_VERY_HIGH,
 };
 #else
 static const uint32_t table_m_size[] = {
@@ -1277,7 +1287,11 @@ __weak HAL_StatusTypeDef HAL_DMA_Abort(DMA_HandleTypeDef *hdma)
 static void ospi_dma_callback(const struct device *dev, void *arg,
 			 uint32_t channel, int status)
 {
+#if CONFIG_DMA_STM32_MDMA
+	MDMA_HandleTypeDef *hdma = arg;
+#else
 	DMA_HandleTypeDef *hdma = arg;
+#endif /* CONFIG_DMA_STM32_MDMA */
 
 	ARG_UNUSED(dev);
 
@@ -1285,7 +1299,11 @@ static void ospi_dma_callback(const struct device *dev, void *arg,
 		LOG_ERR("DMA callback error with channel %d.", channel);
 	}
 
+#if CONFIG_DMA_STM32_MDMA
+	HAL_MDMA_IRQHandler(hdma);
+#else
 	HAL_DMA_IRQHandler(hdma);
+#endif /* CONFIG_DMA_STM32_MDMA */
 }
 #endif
 
@@ -1814,8 +1832,11 @@ static int flash_stm32_ospi_init(const struct device *dev)
 	 * how to route callbacks.
 	 */
 	struct dma_config dma_cfg = dev_data->dma.cfg;
+#if defined(CONFIG_DMA_STM32_MDMA)
+	static MDMA_HandleTypeDef hdma;
+#else
 	static DMA_HandleTypeDef hdma;
-
+#endif /* CONFIG_DMA_STM32_MDMA */
 	if (!device_is_ready(dev_data->dma.dev)) {
 		LOG_ERR("%s device not ready", dev_data->dma.dev->name);
 		return -ENODEV;
@@ -1853,15 +1874,28 @@ static int flash_stm32_ospi_init(const struct device *dev)
 	hdma.Init.DestBurstLength = 4;
 	hdma.Init.TransferAllocatedPort = DMA_SRC_ALLOCATED_PORT0 | DMA_DEST_ALLOCATED_PORT1;
 	hdma.Init.TransferEventMode = DMA_TCEM_BLOCK_TRANSFER;
+	hdma.Init.Mode = DMA_NORMAL;
+	hdma.Init.Direction = DMA_PERIPH_TO_MEMORY;
+#elif CONFIG_DMA_STM32_MDMA
+	hdma.Init.TransferTriggerMode = MDMA_BUFFER_TRANSFER;
+	hdma.Init.Endianness = MDMA_LITTLE_ENDIANNESS_PRESERVE;
+	hdma.Init.SourceInc = MDMA_SRC_INC_BYTE;
+	hdma.Init.DestinationInc = MDMA_DEST_INC_BYTE;
+	hdma.Init.DataAlignment = MDMA_DATAALIGN_PACKENABLE;
+	hdma.Init.BufferTransferLength = 4;
+	hdma.Init.SourceBurst = MDMA_SOURCE_BURST_SINGLE;
+	hdma.Init.DestBurst = MDMA_DEST_BURST_SINGLE;
+	hdma.Init.SourceBlockAddressOffset = 0;
+	hdma.Init.DestBlockAddressOffset = 0;
 #else
 	hdma.Init.PeriphDataAlignment = table_p_size[index];
 	hdma.Init.MemDataAlignment = table_m_size[index];
 	hdma.Init.PeriphInc = DMA_PINC_DISABLE;
 	hdma.Init.MemInc = DMA_MINC_ENABLE;
-#endif /* CONFIG_DMA_STM32U5 */
 	hdma.Init.Mode = DMA_NORMAL;
-	hdma.Init.Priority = table_priority[dma_cfg.channel_priority];
 	hdma.Init.Direction = DMA_PERIPH_TO_MEMORY;
+#endif /* CONFIG_DMA_STM32U5 */
+	hdma.Init.Priority = table_priority[dma_cfg.channel_priority];
 #ifdef CONFIG_DMA_STM32_V1
 	/* TODO: Not tested in this configuration */
 	hdma.Init.Channel = dma_cfg.dma_slot;
@@ -1879,6 +1913,9 @@ static int flash_stm32_ospi_init(const struct device *dev)
 	 */
 	hdma.Instance = __LL_DMA_GET_CHANNEL_INSTANCE(dev_data->dma.reg,
 						      dev_data->dma.channel);
+#elif defined(CONFIG_DMA_STM32_MDMA)
+	hdma.Instance = LL_MDMA_GET_CHANNEL_INSTANCE(dev_data->dma.reg,
+						      dev_data->dma.channel-1);
 #else
 	hdma.Instance = __LL_DMA_GET_CHANNEL_INSTANCE(dev_data->dma.reg,
 						      dev_data->dma.channel-1);
@@ -1886,12 +1923,21 @@ static int flash_stm32_ospi_init(const struct device *dev)
 #endif /* CONFIG_DMA_STM32_V1 */
 
 	/* Initialize DMA HAL */
+#if defined(CONFIG_DMA_STM32_MDMA)
+	__HAL_LINKDMA(&dev_data->hospi, hmdma, hdma);
+	if (HAL_MDMA_Init(&hdma) != HAL_OK) {
+		LOG_ERR("OSPI MDMA Init failed");
+		return -EIO;
+	}
+	LOG_INF("OSPI with MDMA transfer");
+#else
 	__HAL_LINKDMA(&dev_data->hospi, hdma, hdma);
 	if (HAL_DMA_Init(&hdma) != HAL_OK) {
 		LOG_ERR("OSPI DMA Init failed");
 		return -EIO;
 	}
 	LOG_INF("OSPI with DMA transfer");
+#endif /* CONFIG_MDMA_STM32 */
 
 #endif /* STM32_OSPI_USE_DMA */
 
