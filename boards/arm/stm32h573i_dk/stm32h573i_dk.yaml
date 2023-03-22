@@ -13,3 +13,4 @@ supported:
   - watchdog
   - entropy
   - dma
+  - pwm

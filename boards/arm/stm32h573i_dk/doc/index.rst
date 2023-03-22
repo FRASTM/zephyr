@@ -175,6 +175,8 @@ hardware features:
 +-----------+------------+-------------------------------------+
 | WATCHDOG  | on-chip    | independent watchdog                |
 +-----------+------------+-------------------------------------+
+|    PWM    | on-chip    | PWM                                 |
++-----------+------------+-------------------------------------+
 
 Other hardware features are not yet supported on this Zephyr port.
 
