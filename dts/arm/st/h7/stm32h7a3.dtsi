@@ -25,6 +25,21 @@
 			vref-channel = <19>;
 		};
 
+		mdma: dma@52000000 {
+			compatible = "st,stm32-mdma";
+			#dma-cells = <3>;
+			reg = <0x52000000 0x1000>;
+			interrupts = <122 0>;
+			clocks = <&rcc STM32_CLOCK_BUS_AHB3 0x00000001>;
+			st,mem2mem;
+			dma-offset = <0>;
+			dma-channels = <16>;
+			dma-requests = <34>;
+			status = "disabled";
+		};
+
+
+
 		dmamux1: dmamux@40020800 {
 			dma-requests= <107>;
 		};
@@ -60,9 +75,10 @@
 			compatible = "st,stm32-ospi";
 			reg = <0x52005000 0x1000>;
 			interrupts = <92 0>;
-			clock-names = "ospix", "ospi-ker";
+			clock-names = "ospix", "ospi-ker", "ospi-mgr";
 			clocks = <&rcc STM32_CLOCK_BUS_AHB3 0x00004000>,
-				<&rcc STM32_SRC_PLL1_Q OSPI_SEL(1)>;
+				<&rcc STM32_SRC_PLL1_Q OSPI_SEL(1)>,
+				<&rcc STM32_CLOCK_BUS_AHB3 0x00200000>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "disabled";
@@ -72,9 +88,10 @@
 			compatible = "st,stm32-ospi";
 			reg = <0x5200a000 0x1000>;
 			interrupts = <150 0>;
-			clock-names = "ospix", "ospi-ker";
+			clock-names = "ospix", "ospi-ker", "ospi-mgr";
 			clocks = <&rcc STM32_CLOCK_BUS_AHB3 0x000080000>,
-				<&rcc STM32_SRC_PLL1_Q OSPI_SEL(1)>;
+				<&rcc STM32_SRC_PLL1_Q OSPI_SEL(1)>,
+				<&rcc STM32_CLOCK_BUS_AHB3 0x00200000>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "disabled";
