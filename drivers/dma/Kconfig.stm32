@@ -12,9 +12,10 @@ config DMA_STM32
 	depends on DT_HAS_ST_STM32_DMA_V1_ENABLED \
 		|| DT_HAS_ST_STM32_DMA_V2_ENABLED \
 		|| DT_HAS_ST_STM32_DMA_V2BIS_ENABLED \
-		|| DT_HAS_ST_STM32_BDMA_ENABLED
+		|| DT_HAS_ST_STM32_BDMA_ENABLED \
+		|| DT_HAS_ST_STM32_MDMA_ENABLED
 	help
-	  Driver for STM32 DMA V1, V2, V2bis and BDMA types.
+	  Driver for STM32 DMA V1, V2, V2bis and MDMA, BDMA types.
 
 config DMA_STM32U5
 	bool "STM32U5 serie DMA driver"
@@ -63,6 +64,14 @@ config DMA_STM32_BDMA
 	default y
 	select USE_STM32_LL_BDMA
 	depends on DT_HAS_ST_STM32_BDMA_ENABLED
+	help
+	  BDMA driver for STM32H7 series SoCs.
+
+config DMA_STM32_MDMA
+	bool "STM32 MDMA driver"
+	default y
+	select USE_STM32_LL_MDMA
+	depends on DT_HAS_ST_STM32_MDMA_ENABLED
 	help
 	  BDMA driver for STM32H7 series SoCs.
 

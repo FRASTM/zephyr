@@ -15,7 +15,7 @@
 /* @brief gives the first DMA channel : 0 or 1 in the register map
  * when counting channels from 1 to N or from 0 to N-1
  */
-#if defined(CONFIG_DMA_STM32U5)
+#if defined(CONFIG_DMA_STM32U5) || defined(CONFIG_DMA_STM32_MDMA)
 /* from DTS the dma stream id is in range 0..N-1 */
 #define STM32_DMA_STREAM_OFFSET 0
 #elif !defined(CONFIG_DMA_STM32_V1)
