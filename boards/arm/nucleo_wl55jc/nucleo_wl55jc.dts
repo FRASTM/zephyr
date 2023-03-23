@@ -81,12 +81,16 @@
 	status = "okay";
 };
 
+&clk_msi {
+	status = "okay";
+};
+
 &pll {
 	div-m = <1>;
-	mul-n = <6>;
+	mul-n = <24>;
 	div-r = <2>;
 	div-q = <2>;
-	clocks = <&clk_hsi>;
+	clocks = <&clk_msi>;
 	status = "okay";
 };
 
