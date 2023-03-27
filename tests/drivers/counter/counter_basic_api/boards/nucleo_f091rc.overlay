@@ -1,0 +1,48 @@
+
+&timers2 {
+	st,prescaler = <79>;
+	counter {
+		compatible = "st,stm32-counter";
+		status = "okay";
+	};
+};
+
+&timers3 {
+	st,prescaler = <79>;
+	status = "okay";
+	counter {
+		compatible = "st,stm32-counter";
+		status = "okay";
+	};
+};
+
+&timers14 {
+	st,prescaler = <79>;
+	status = "okay";
+	counter {
+		compatible = "st,stm32-counter";
+		status = "okay";
+	};
+};
+
+&timers16 {
+	st,prescaler = <79>;
+	status = "okay";
+	counter {
+		compatible = "st,stm32-counter";
+		status = "okay";
+	};
+};
+
+&timers17 {
+	st,prescaler = <79>;
+	status = "okay";
+	counter {
+		compatible = "st,stm32-counter";
+		status = "okay";
+	};
+};
+
+&rtc {
+	status = "disabled";
+};
