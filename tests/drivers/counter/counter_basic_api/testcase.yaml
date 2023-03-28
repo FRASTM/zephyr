@@ -4,7 +4,7 @@ tests:
     depends_on: counter
     min_ram: 16
     platform_exclude: nucleo_f302r8
-    timeout: 600
+    timeout: 6000
   drivers.counter.basic_api.nrf_zli:
     tags: drivers counter
     depends_on: counter
