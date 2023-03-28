@@ -23,10 +23,10 @@ struct counter_alarm_cfg alarm_cfg;
 #define TIMER DT_NODELABEL(extrtc0)
 #elif defined(CONFIG_COUNTER_NRF_RTC)
 #define TIMER DT_NODELABEL(rtc0)
-#elif defined(CONFIG_COUNTER_TIMER_STM32)
-#define TIMER DT_INST(0, st_stm32_counter)
 #elif defined(CONFIG_COUNTER_RTC_STM32)
 #define TIMER DT_INST(0, st_stm32_rtc)
+#elif defined(CONFIG_COUNTER_TIMER_STM32)
+#define TIMER DT_INST(0, st_stm32_counter)
 #elif defined(CONFIG_COUNTER_NATIVE_POSIX)
 #define TIMER DT_NODELABEL(counter0)
 #elif defined(CONFIG_COUNTER_XLNX_AXI_TIMER)
@@ -87,7 +87,7 @@ void main(void)
 	const struct device *const counter_dev = DEVICE_DT_GET(TIMER);
 	int err;
 
-	printk("Counter alarm sample\n\n");
+	printk("Counter alarm sample on %s\n\n", counter_dev->name);
 
 	if (!device_is_ready(counter_dev)) {
 		printk("device not ready.\n");
