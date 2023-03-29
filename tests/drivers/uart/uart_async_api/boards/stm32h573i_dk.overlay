@@ -1,0 +1,8 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+dut: &usart3 {
+	/* DMA request 26 for usart3 tx and 25 for usart3 rx */
+	dmas = <&gpdma1 5 26 STM32_DMA_PERIPH_TX>,
+		<&gpdma1 4 25 STM32_DMA_PERIPH_RX>;
+	dma-names = "tx", "rx";
+};
