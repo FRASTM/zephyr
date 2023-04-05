@@ -1,0 +1,14 @@
+/*
+ * Copyright (c) 2023 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&octospi1 {
+            dmas = <&gpdma1 1 57 0>; /* request 57 for OCTOSPI1 */
+            dma-names = "tx_rx";
+};
+
+&gpdma1 {
+	status = "okay";
+};
