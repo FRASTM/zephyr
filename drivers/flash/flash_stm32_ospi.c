@@ -1890,7 +1890,12 @@ static int flash_stm32_ospi_init(const struct device *dev)
 #endif /* CONFIG_DMA_STM32_V1 */
 
 	/* Initialize DMA HAL */
+#if defined(CONFIG_SOC_SERIES_STM32H5X)
+	__HAL_LINKDMA(&dev_data->hospi, hdmatx, hdma);
+	__HAL_LINKDMA(&dev_data->hospi, hdmarx, hdma);
+#else
 	__HAL_LINKDMA(&dev_data->hospi, hdma, hdma);
+#endif /* CONFIG_SOC_SERIES_STM32H5X */
 	if (HAL_DMA_Init(&hdma) != HAL_OK) {
 		LOG_ERR("OSPI DMA Init failed");
 		return -EIO;
