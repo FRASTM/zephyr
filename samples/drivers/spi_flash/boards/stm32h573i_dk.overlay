@@ -4,9 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+
 &octospi1 {
-            dmas = <&gpdma1 1 57 0>; /* request 57 for OCTOSPI1 */
-            dma-names = "tx_rx";
+	/* request 57 for OCTOSPI1 */
+	dmas = <&gpdma1 0 57 STM32_DMA_PERIPH_TX
+		&gpdma1 1 57 STM32_DMA_PERIPH_RX>;
+	dma-names = "tx", "rx";
 };
 
 &gpdma1 {
