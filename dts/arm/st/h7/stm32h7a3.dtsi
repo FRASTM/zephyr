@@ -33,6 +33,18 @@
 			dma-requests= <107>;
 		};
 
+		mdma: dma@50020000 {
+			compatible = "st,stm32-dmamux";
+			#dma-cells = <3>;
+			reg = <0x50020000 0x400>;
+			interrupts = <122 0>;
+			clocks = <&rcc STM32_CLOCK_BUS_AHB3 0x00000001>;
+			dma-channels = <16>;
+			dma-requests = <34>;
+			status = "disabled";
+		};
+
+
 		usbotg_hs: usb@40040000 {
 			compatible = "st,stm32-otghs";
 			reg = <0x40040000 0x40000>;
