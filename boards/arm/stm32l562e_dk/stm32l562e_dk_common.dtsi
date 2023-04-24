@@ -78,6 +78,8 @@
 };
 
 &usart1 {
+	clocks = <&rcc STM32_CLOCK_BUS_APB2 0x00004000>,
+		 <&rcc STM32_SRC_SYSCLK LPTIM1_SEL(1)>;
 	current-speed = <115200>;
 	pinctrl-0 = <&usart1_tx_pa9 &usart1_rx_pa10>;
 	pinctrl-names = "default";
