@@ -464,14 +464,21 @@
 		};
 
 		lptim3: timers@46004800 {
-			compatible = "st,stm32-lptim";
+			compatible = "st,stm32-timers";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x46004800 0x400>;
 			clocks = <&rcc STM32_CLOCK(APB3, 12U)>;
+			resets = <&rctl STM32_RESET(APB3, 12U)>;
 			interrupts = <98 0>;
 			interrupt-names = "global";
 			status = "disabled";
+
+			pwm {
+				compatible = "st,stm32-pwm";
+				status = "disabled";
+				#pwm-cells = <3>;
+			};
 		};
 
 		lptim4: timers@46004c00 {
