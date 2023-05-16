@@ -19,3 +19,4 @@ supported:
   - pwm
   - counter
   - spi
+  - i2c
