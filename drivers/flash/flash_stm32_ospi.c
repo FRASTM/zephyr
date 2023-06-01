@@ -36,6 +36,9 @@ LOG_MODULE_REGISTER(flash_stm32_ospi, CONFIG_FLASH_LOG_LEVEL);
 		    (_CONCAT(HAL_OSPIM_, DT_STRING_TOKEN(STM32_OSPI_NODE, prop))),	\
 		    ((default_value)))
 
+/* Get the base address of the flash from the DTS node */
+#define STM32_OSPI_BASE_ADDRESS DT_REG_ADDR(DT_INST(0, st_stm32_ospi_nor))
+
 #define STM32_OSPI_RESET_GPIO DT_INST_NODE_HAS_PROP(0, reset_gpios)
 
 #define STM32_OSPI_DLYB_BYPASSED DT_PROP(STM32_OSPI_NODE, dlyb_bypass)
@@ -2300,7 +2303,7 @@ static const struct flash_stm32_ospi_config flash_stm32_ospi_cfg = {
 		       .enr = DT_CLOCKS_CELL_BY_NAME(STM32_OSPI_NODE, ospi_mgr, bits)},
 #endif
 	.irq_config = flash_stm32_ospi_irq_config_func,
-	.flash_size = DT_INST_PROP(0, size) / 8U,
+	.flash_size = DT_REG_ADDR_BY_IDX(DT_INST(0, st_stm32_ospi_nor), 1),
 	.max_frequency = DT_INST_PROP(0, ospi_max_frequency),
 	.data_mode = DT_INST_PROP(0, spi_bus_width), /* SPI or OPI */
 	.data_rate = DT_INST_PROP(0, data_rate), /* DTR or STR */
