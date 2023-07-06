@@ -1,0 +1,21 @@
+/*
+ * Copyright (c) 2023 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/* use the USB OTG HS controller for zephyr_udc0 on the nucleo_f429zi */
+/delete-node/ &zephyr_udc0;
+zephyr_udc0: &usbotg_hs {
+	pinctrl-0 = <&usb_otg_hs_dm_pb14 &usb_otg_hs_dp_pb15>;
+	pinctrl-names = "default";
+	status = "okay";
+
+	cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+
+	cdc_acm_uart1 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
