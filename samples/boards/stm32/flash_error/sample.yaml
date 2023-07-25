@@ -1,0 +1,8 @@
+sample:
+  description: detect a RDSERR and/or RDPERR
+  name: stm32_flash_error
+tests:
+  sample.boards.stm32.flash_error:
+    filter: CONFIG_SOC_SERIES_STM32H7X
+    platform_allow:
+      - nucleo_h753zi
