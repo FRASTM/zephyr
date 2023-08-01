@@ -1,0 +1,13 @@
+common:
+  tags:
+    - drivers
+    - flash
+tests:
+  drivers.flash.stm32.memmap:
+    platform_allow:
+      - b_u585i_iot02a
+      - stm32h7b3i_dk
+      - stm32h735g_disco
+    extra_configs:
+      - CONFIG_FLASH_STM32_READOUT_PROTECTION=y
+    filter: dt_compat_enabled("st,stm32-ospi-nor")
