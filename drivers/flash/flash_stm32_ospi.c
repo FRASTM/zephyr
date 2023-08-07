@@ -1074,7 +1074,9 @@ static bool stm32_ospi_is_memorymapped(const struct device *dev)
 {
 	struct flash_stm32_ospi_data *dev_data = dev->data;
 
-	return (HAL_OSPI_IsMemoryMapped(&dev_data->hospi) == 1) ? true : false;
+	return ((READ_BIT(dev_data->hospi.Instance->CR,
+			  OCTOSPI_CR_FMODE) == OCTOSPI_CR_FMODE) ?
+			  true : false);
 
 }
 #endif /* CONFIG_STM32_MEMMAP */
