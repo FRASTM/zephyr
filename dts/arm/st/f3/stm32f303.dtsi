@@ -173,5 +173,21 @@
 				       STM32_ADC_RES(6, 0x03)>;
 			sampling-times = <2 3 5 8 20 62 182 602>;
 		};
+
+		adc3: adc@50000400 {
+			compatible = "st,stm32-adc";
+			reg = <0x50000400 0x400>;
+			clocks = <&rcc STM32_CLOCK_BUS_AHB1 0x20000000>;
+			interrupts = <47 0>;
+			status = "disabled";
+			vref-mv = <3000>;
+			#io-channel-cells = <1>;
+			vref-channel = <18>;
+			resolutions = <STM32_ADC_RES(12, 0x00)
+				       STM32_ADC_RES(10, 0x01)
+				       STM32_ADC_RES(8, 0x02)
+				       STM32_ADC_RES(6, 0x03)>;
+			sampling-times = <2 3 5 8 20 62 182 602>;
+		};
 	};
 };
