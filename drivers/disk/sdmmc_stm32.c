@@ -156,10 +156,12 @@ static int stm32_sdmmc_clock_enable(struct stm32_sdmmc_priv *priv)
 			return -EIO;
 		}
 
+#if !defined(CONFIG_SOC_SERIES_STM32H7X)
 		if (sdmmc_clock_rate != MHZ(48)) {
 			LOG_ERR("SDMMC Clock is not 48MHz (%d)", sdmmc_clock_rate);
 			return -ENOTSUP;
 		}
+#endif /* ! CONFIG_SOC_SERIES_STM32H7X */
 	}
 
 	/* Enable the APB clock for stm32_sdmmc */
