@@ -1,0 +1,45 @@
+/*
+ * Copyright (c) 2024 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	chosen {
+		zephyr,flash = &mx66uw1g45;
+		zephyr,code-partition = &slot0_partition;
+	};
+	
+	aliases {
+		led0 = &blue_led;
+		led1 = &orange_led;
+		led2 = &green_led;
+	};
+};
+/*
+&mx66uw1g45 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+			slot0_partition: partition@0 {
+				label = "image-0";
+				reg = <0x00000000 DT_SIZE_K(416)>;
+			};
+			slot1_partition: partition@78000 {
+				label = "image-1";
+				reg = <0x00078000 DT_SIZE_K(416)>;
+			};
+			scratch_partition: partition@e0000 {
+				label = "image-scratch";
+				reg = <0x000e0000 DT_SIZE_K(64)>;
+			};
+			storage_partition: partition@f0000 {
+				label = "storage";
+				reg = <0x000f0000 DT_SIZE_K(64)>;
+			};
+
+	};
+};
+*/
