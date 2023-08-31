@@ -1,0 +1,19 @@
+sample:
+  description: Hello World sample, the simplest Zephyr from external flash
+    application
+  name: hello world xip
+tests:
+  sample.boards.stm32.hello_world_xip:
+    depends_on: backup_sram
+    filter: dt_compat_enabled("st,stm32-ospi-nor") || dt_compat_enabled("st,stm32-qspi-nor")
+    harness: console
+    harness_config:
+     type: one_line
+      regex:
+        - "Hello World! from external flash (.*)"
+    integration_platforms:
+      - b_u585i_iot02a
+    platform_allow:
+      - b_u585i_iot02a
+      - stm32h7b3i_dk
+      - stm32h735g_disco
