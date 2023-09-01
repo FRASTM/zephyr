@@ -21,6 +21,7 @@
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash0;
 		zephyr,flash-controller = &mt25ql512ab1;
+		zephyr,code-partition = &slot1_partition;
 	};
 
 	sdram2: sdram@d0000000 {
@@ -111,7 +112,15 @@
 		#address-cells = <1>;
 		#size-cells = <1>;
 
-		/* Set 2KB of storage at the end of first 1MB flash */
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x00000000 DT_SIZE_K(64)>;
+		};
+			/* Set 2KB of storage at the end of first 1MB flash */
+		slot0_partition: partition@10000 {
+			label = "image-0";
+			reg = <0x00010000 DT_SIZE_K(416)>;
+		};
 		storage_partition: partition@ff800 {
 			label = "storage";
 			reg = <0x000ff800 DT_SIZE_K(2)>;
@@ -232,11 +241,10 @@ zephyr_udc0: &usbotg_hs {
 	pinctrl-names = "default";
 	status = "okay";
 
-	mt25ql512ab1: qspi-nor-flash-1@0 {
+	mt25ql512ab1: qspi-nor-flash-1@90000000 {
 		compatible = "st,stm32-qspi-nor";
-		reg = <0>;
+		reg = <0x90000000 DT_SIZE_M(64)>; /* 512 Mbits */
 		qspi-max-frequency = <72000000>;
-		size = <DT_SIZE_M(512)>; /* 64 MBytes */
 		spi-bus-width = <4>;
 		status = "okay";
 
@@ -245,8 +253,10 @@ zephyr_udc0: &usbotg_hs {
 			   #address-cells = <1>;
 			   #size-cells = <1>;
 
-			   partition@0 {
-			       reg = <0x0 DT_SIZE_M(64)>;
+			   /* put image at offset 0 in slot1 */
+			   slot1_partition:partition@0 {
+			       label = "nor";
+			       reg = <0x00000000 DT_SIZE_M(32)>;
 			   };
 		};
 	};
