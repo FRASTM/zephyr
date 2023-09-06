@@ -42,9 +42,6 @@ LOG_MODULE_REGISTER(flash_stm32_ospi, CONFIG_FLASH_LOG_LEVEL);
 
 #define STM32_OSPI_USE_DMA DT_NODE_HAS_PROP(STM32_OSPI_NODE, dmas)
 
-/* The Base Address of the octo spi chosen by the Flash controller */
-#define STM32_NOR_FLASH_BASE_ADDRESS OCTOSPI2_BASE
-
 #if STM32_OSPI_USE_DMA
 #include <zephyr/drivers/dma/dma_stm32.h>
 #include <zephyr/drivers/dma.h>
@@ -138,6 +135,7 @@ struct flash_stm32_ospi_config {
 	const struct stm32_pclken pclken_mgr; /* clock subsystem */
 #endif
 	irq_config_func_t irq_config;
+	uint32_t flash_base_address;
 	size_t flash_size;
 	uint32_t max_frequency;
 	int data_mode; /* SPI or QSPI or OSPI */
@@ -1286,9 +1284,10 @@ static int flash_stm32_ospi_read(const struct device *dev, off_t addr,
 #ifdef CONFIG_STM32_MEMMAP
 	if (stm32_ospi_is_memorymapped(dev)) {
 		LOG_DBG("MemoryMapped Read offset: 0x%lx, len: %zu",
-			(long)(STM32_NOR_FLASH_BASE_ADDRESS + addr),
+			(long)(dev_cfg->flash_base_address + addr),
 			size);
-		memcpy(data, (uint8_t *)STM32_NOR_FLASH_BASE_ADDRESS + addr, size);
+
+		memcpy(data, (uint8_t *)dev_cfg->flash_base_address + addr, size);
 
 		return 0;
 	}
@@ -1385,9 +1384,10 @@ static int flash_stm32_ospi_write(const struct device *dev, off_t addr,
 #ifdef CONFIG_STM32_MEMMAP
 	if (stm32_ospi_is_memorymapped(dev)) {
 		LOG_DBG("MemoryMapped Write offset: 0x%lx, len: %zu",
-			(long)(STM32_NOR_FLASH_BASE_ADDRESS + addr),
+			(long)(dev_cfg->flash_base_address + addr),
 			size);
-		memcpy((uint8_t *)STM32_NOR_FLASH_BASE_ADDRESS + addr, data, size);
+
+		memcpy((uint8_t *)dev_cfg->flash_base_address + addr, data, size);
 
 		return 0;
 	}
@@ -2403,11 +2403,18 @@ static int flash_stm32_ospi_init(const struct device *dev)
 #ifdef CONFIG_STM32_MEMMAP
 	/* Now configure the octo Flash in MemoryMapped (access by address) */
 	ret = stm32_ospi_set_memorymap(dev);
+
 	if (ret != 0) {
 		LOG_ERR("Error (%d): setting NOR in MemoryMapped mode", ret);
 		return -EINVAL;
 	}
-	LOG_INF("NOR in MemoryMapped mode");
+	if ((dev_cfg->flash_base_address == 0) || (dev_cfg->flash_size == 0)) {
+		LOG_ERR("Error wrong NOR base address/size");
+		return -EINVAL;
+	}
+	LOG_INF("NOR in MemoryMapped mode at 0x%x (0x%x bytes)",
+		dev_cfg->flash_base_address,
+		dev_cfg->flash_size);
 
 #endif /* CONFIG_STM32_MEMMAP */
 	return 0;
@@ -2475,7 +2482,8 @@ static const struct flash_stm32_ospi_config flash_stm32_ospi_cfg = {
 		       .enr = DT_CLOCKS_CELL_BY_NAME(STM32_OSPI_NODE, ospi_mgr, bits)},
 #endif
 	.irq_config = flash_stm32_ospi_irq_config_func,
-	.flash_size = DT_INST_PROP(0, size) / 8U,
+	.flash_base_address = DT_REG_ADDR(DT_INST(0, st_stm32_ospi_nor)),
+	.flash_size = DT_REG_ADDR_BY_IDX(DT_INST(0, st_stm32_ospi_nor), 1),
 	.max_frequency = DT_INST_PROP(0, ospi_max_frequency),
 	.data_mode = DT_INST_PROP(0, spi_bus_width), /* SPI or OPI */
 	.data_rate = DT_INST_PROP(0, data_rate), /* DTR or STR */
