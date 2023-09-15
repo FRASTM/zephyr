@@ -9,8 +9,14 @@ FILE(GLOB app_sources src/*.c)
 target_sources(app PRIVATE ${app_sources})
 target_sources_ifdef(CONFIG_NRFX_QSPI app PRIVATE boards/nrf5340dk_nrf5340_cpuapp/ext_mem_init.c)
 
-# Run ext_code from the external flash (XIP). No need to copy.
+# Run ext_code from the external flash (XIP). Place ext_rodata (const vars) in external flash. No need to copy.
+# Note that external flash must be loaded with a capable external loader
+if(CONFIG_FLASH_STM32_OSPI)
+zephyr_code_relocate(FILES src/ext_code.c LOCATION XSPI_TEXT NOCOPY)
+zephyr_code_relocate(FILES src/ext_code.c LOCATION XSPI_RODATA NOCOPY)
+else()
 zephyr_code_relocate(FILES src/ext_code.c LOCATION EXTFLASH_TEXT NOCOPY)
+endif()
 
 # But still relocate (copy) the data to RAM
 zephyr_code_relocate(FILES src/ext_code.c LOCATION RAM_DATA)
