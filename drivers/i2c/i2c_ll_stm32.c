@@ -43,6 +43,40 @@ LOG_MODULE_REGISTER(i2c_ll_stm32);
 #else
 #define STM32_I2C_DOMAIN_CLOCK_SUPPORT 0
 #endif
+int i2c_stm32_get_config(const struct device *dev, uint32_t *config)
+{
+	const struct i2c_stm32_config *cfg = dev->config;
+	struct i2c_stm32_data *data = dev->data;
+	struct i2c_config_timing *cfg_timings = (void *)config;
+	I2C_TypeDef *i2c = cfg->i2c;
+	uint32_t clock = 0U;
+
+	if (IS_ENABLED(STM32_I2C_DOMAIN_CLOCK_SUPPORT) && (cfg->pclk_len > 1)) {
+		if (clock_control_get_rate(DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE),
+					   (clock_control_subsys_t)&cfg->pclken[1],
+					   &clock) < 0) {
+			LOG_ERR("Failed call clock_control_get_rate(pclken[1])");
+			return -EIO;
+		}
+	} else {
+		if (clock_control_get_rate(DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE),
+					   (clock_control_subsys_t) &cfg->pclken[0],
+					   &clock) < 0) {
+			LOG_ERR("Failed call clock_control_get_rate(pclken[0])");
+			return -EIO;
+		}
+	}
+
+	k_sem_take(&data->bus_mutex, K_FOREVER);
+	/* Use the config to pass the pointer to a i2c_config_timing structure */
+	cfg_timings->periph_clock = clock;
+	cfg_timings->i2c_speed = cfg->bitrate;
+	cfg_timings->timing_setting = LL_I2C_GET_TIMING(i2c);
+
+	k_sem_give(&data->bus_mutex);
+
+	return 0;
+}
 
 int i2c_stm32_runtime_configure(const struct device *dev, uint32_t config)
 {
@@ -272,6 +306,7 @@ restore:
 static const struct i2c_driver_api api_funcs = {
 	.configure = i2c_stm32_runtime_configure,
 	.transfer = i2c_stm32_transfer,
+	.get_config = i2c_stm32_get_config,
 #if CONFIG_I2C_STM32_BUS_RECOVERY
 	.recover_bus = i2c_stm32_recover_bus,
 #endif /* CONFIG_I2C_STM32_BUS_RECOVERY */

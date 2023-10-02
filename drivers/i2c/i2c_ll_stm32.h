@@ -85,6 +85,7 @@ int32_t stm32_i2c_transaction(const struct device *dev,
 			    uint16_t periph);
 int32_t stm32_i2c_configure_timing(const struct device *dev, uint32_t clk);
 int i2c_stm32_runtime_configure(const struct device *dev, uint32_t config);
+int i2c_stm32_get_config(const struct device *dev, uint32_t *config);
 
 void stm32_i2c_event_isr(void *arg);
 void stm32_i2c_error_isr(void *arg);
@@ -95,6 +96,13 @@ void stm32_i2c_combined_isr(void *arg);
 #ifdef CONFIG_I2C_TARGET
 int i2c_stm32_target_register(const struct device *dev, struct i2c_target_config *config);
 int i2c_stm32_target_unregister(const struct device *dev, struct i2c_target_config *config);
+#endif
+
+/* Get the I2C timing register to be reported by the i2c_stm32_get_config */
+#ifdef CONFIG_I2C_STM32_V1
+#define LL_I2C_GET_TIMING(instance) LL_I2C_ReadReg(instance, CCR)
+#else
+#define LL_I2C_GET_TIMING(instance) LL_I2C_ReadReg(instance, TIMINGR)
 #endif
 
 #endif	/* ZEPHYR_DRIVERS_I2C_I2C_LL_STM32_H_ */
