@@ -1,0 +1,11 @@
+/ {
+	aliases {
+		i2c-0 = &i2c2;
+	};
+};
+
+&i2c2 {
+	/delete-property/ clock-frequency;
+	clock-frequency = <I2C_BITRATE_FAST>;
+};
+
