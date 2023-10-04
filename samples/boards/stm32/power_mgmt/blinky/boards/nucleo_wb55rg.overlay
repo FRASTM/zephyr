@@ -7,5 +7,5 @@
   */
 
 &lptim1 {
-	st,prescaler = <32>;
+	st,prescaler = <16>;
 };

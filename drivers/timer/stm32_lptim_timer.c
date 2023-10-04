@@ -404,6 +404,16 @@ static int sys_clock_driver_init(void)
 	}
 #endif
 
+#if defined(CONFIG_SOC_SERIES_STM32WBAX) || defined(CONFIG_SOC_SERIES_STM32WBX)
+	/* Set LPTIM time base based on clock source freq */
+	if ( (lptim_clock_freq == KHZ(32)) && (LPTIM_CLOCK_RATIO == 16)) {
+		lptim_time_base = 0xEA5F; /* 15 seconds */
+	} else if (((lptim_clock_freq == 32768) && (LPTIM_CLOCK_RATIO == 16)) {
+		lptim_time_base = 0xEFFF; /* 15 seconds */
+	} else {
+		return -EIO;
+	}
+#else
 	/* Set LPTIM time base based on clock source freq */
 	if (lptim_clock_freq == KHZ(32)) {
 		lptim_time_base = 0xF9FF;
@@ -412,6 +422,9 @@ static int sys_clock_driver_init(void)
 	} else {
 		return -EIO;
 	}
+#endif
+
+
 
 	if (IS_ENABLED(DT_PROP(DT_DRV_INST(0), st_static_prescaler))) {
 		/*
