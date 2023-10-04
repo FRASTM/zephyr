@@ -46,6 +46,10 @@ static const struct stm32_pclken lptim_clk[] = STM32_DT_INST_CLOCKS(0);
 
 static const struct device *const clk_ctrl = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE);
 
+/* For tick accuracy, a specific tick to freq ratio is expected */
+/* This check assumes LSI@32KHz or LSE@32768Hz */
+#define LPTIM_CLOCK_RATIO DT_PROP(DT_DRV_INST(0), st_prescaler)
+
 /*
  * Assumptions and limitations:
  *
@@ -61,11 +65,41 @@ static const struct device *const clk_ctrl = DEVICE_DT_GET(STM32_CLOCK_CONTROL_N
  *    0xFFFF / (LSE freq (32768Hz) / 128)
  */
 
-static uint32_t lptim_clock_freq = KHZ(32);
-static int32_t lptim_time_base;
+#if (CONFIG_STM32_LPTIM_CLOCK_LSI)
+static uint32_t lptim_clock_freq = KHZ(32); /* Force STM32_SRC_LSI */
 
-/* The prescaler given by the DTS and to apply to the lptim_clock_freq */
-#define LPTIM_CLOCK_RATIO DT_PROP(DT_DRV_INST(0), st_prescaler)
+/* Kconfig defines the clock source as LSI : check coherency with DTS */
+#if (DT_INST_CLOCKS_CELL_BY_IDX(0, 1, bus) != STM32_SRC_LSI)
+#warning CONFIG_STM32_LPTIM_CLOCK_LSI requires STM32_SRC_LSI (DTS)
+#endif /* STM32_SRC_LSI */
+
+/* Kconfig should set the adapted CONFIG_SYS_CLOCK_TICKS_PER_SEC */
+#if !defined(CONFIG_STM32_LPTIM_TICK_FREQ_RATIO_OVERRIDE)
+#if ((CONFIG_SYS_CLOCK_TICKS_PER_SEC > 32000/LPTIM_CLOCK_RATIO) || \
+	(CONFIG_SYS_CLOCK_TICKS_PER_SEC > 4000))
+#warning It is recommended to set the tick freq to 32000 / prescaler
+#endif
+#endif /* !CONFIG_STM32_LPTIM_TICK_FREQ_RATIO_OVERRIDE */
+
+#elif (CONFIG_STM32_LPTIM_CLOCK_LSE)
+static uint32_t lptim_clock_freq = 32768; /* Force STM32_SRC_LSE */
+
+/* Kconfig defines the clock source as LSE : check coherency with DTS */
+#if (DT_INST_CLOCKS_CELL_BY_IDX(0, 1, bus) != STM32_SRC_LSE)
+#warning CONFIG_STM32_LPTIM_CLOCK_LSE requires STM32_SRC_LSE (DTS)
+#endif /* STM32_SRC_LSE */
+
+/* Kconfig should set the adapted CONFIG_SYS_CLOCK_TICKS_PER_SEC */
+#if !defined(CONFIG_STM32_LPTIM_TICK_FREQ_RATIO_OVERRIDE)
+#if ((CONFIG_SYS_CLOCK_TICKS_PER_SEC > 32768/LPTIM_CLOCK_RATIO) || \
+	(CONFIG_SYS_CLOCK_TICKS_PER_SEC > 4096))
+#warning It is recommended to set the tick freq to 32768 / prescaler
+#endif
+#endif /* !CONFIG_STM32_LPTIM_TICK_FREQ_RATIO_OVERRIDE */
+
+#endif /* CONFIG_STM32_LPTIM_CLOCK_LSI */
+
+static int32_t lptim_time_base;
 
 /* Minimum nb of clock cycles to have to set autoreload register correctly */
 #define LPTIM_GUARD_VALUE 2
@@ -80,17 +114,6 @@ static uint32_t autoreload_next;
 static bool autoreload_ready = true;
 
 static struct k_spinlock lock;
-
-/* For tick accuracy, a specific tick to freq ratio is expected */
-/* This check assumes LSI@32KHz or LSE@32768Hz */
-#if !defined(CONFIG_STM32_LPTIM_TICK_FREQ_RATIO_OVERRIDE)
-#if (((DT_CLOCKS_CELL_BY_IDX(DT_DRV_INST(0), 1, bus) == STM32_SRC_LSI) &&	\
-		(CONFIG_SYS_CLOCK_TICKS_PER_SEC != 4000)) ||			\
-	((DT_CLOCKS_CELL_BY_IDX(DT_DRV_INST(0), 1, bus) == STM32_SRC_LSE) &&	\
-		(CONFIG_SYS_CLOCK_TICKS_PER_SEC != 4096)))
-#warning Advised tick freq is 4096 for LSE / 4000 for LSI
-#endif
-#endif /* !CONFIG_STM32_LPTIM_TICK_FREQ_RATIO_OVERRIDE */
 
 static inline bool arrm_state_get(void)
 {
