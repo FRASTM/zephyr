@@ -106,10 +106,9 @@ int main(void)
 		printk("\nReset cause: Shutdown mode or power up\n\n");
 	}
 
-	if (cause == RESET_PIN) {
+	if ((cause == RESET_PIN) || (cause == (RESET_PIN | RESET_SOFTWARE))) {
 		printk("\nReset cause: Reset pin\n\n");
 	}
-
 
 	__ASSERT_NO_MSG(gpio_is_ready_dt(&led));
 	if (!gpio_is_ready_dt(&button)) {
