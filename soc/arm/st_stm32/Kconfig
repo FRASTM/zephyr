@@ -24,6 +24,13 @@ config STM32_ENABLE_DEBUG_SLEEP_STOP
 	  effectivly destroys the use-case of `west attach`. Also
 	  SEGGER RTT and similar technologies need this.
 
+config STM32_MEMMAP_EXT_FLASH_BASE_ADDRESS
+	hex "External Flash Base Address"
+	default 0
+	depends on STM32_MEMMAP
+	help
+	   Base Address of the External Flash
+
 source "soc/arm/st_stm32/*/Kconfig.soc"
 
 endif # SOC_FAMILY_STM32
