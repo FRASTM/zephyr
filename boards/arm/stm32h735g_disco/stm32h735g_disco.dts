@@ -47,6 +47,7 @@
 		led1 = &green_led;
 		sw0 = &user_button;
 		volt-sensor1 = &vbat;
+		spi-flash0 = &mx25lm51245;
 	};
 };
 
@@ -86,6 +87,41 @@
 	d2ppre1 = <2>;
 	d2ppre2 = <2>;
 	d3ppre = <2>;
+};
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		/*
+		 * Following flash partition is dedicated to the use of b_u585i_iot02a
+		 * with TZEN=0 (so w/o TFM).
+		 * Set the partitions with first MB to make use of the whole Bank1
+		 */
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x00000000 DT_SIZE_K(64)>;
+		};
+		slot0_partition: partition@10000 {
+			label = "image-0";
+			reg = <0x00010000 DT_SIZE_K(416)>;
+		};
+		slot1_partition: partition@78000 {
+			label = "image-1";
+			reg = <0x00078000 DT_SIZE_K(416)>;
+		};
+		scratch_partition: partition@e0000 {
+			label = "image-scratch";
+			reg = <0x000e0000 DT_SIZE_K(64)>;
+		};
+		storage_partition: partition@f0000 {
+			label = "storage";
+			reg = <0x000f0000 DT_SIZE_K(64)>;
+		};
+
+	};
 };
 
 &usart3 {
