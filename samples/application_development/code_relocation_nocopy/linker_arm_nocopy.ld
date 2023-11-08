@@ -26,6 +26,15 @@
 #define EXTFLASH_SIZE	DT_PROP_OR(EXTFLASH_NODE, size_in_bytes, \
 				   DT_PROP(EXTFLASH_NODE, size) / 8)
 
+#elif defined(CONFIG_FLASH_STM32_OSPI) && defined(CONFIG_STM32_MEMMAP)
+/*
+* On stm32, external flash is mapped in XIP region at address
+* set by CONFIG_STM32_MEMMAP_EXT_FLASH_BASE_ADDRESS
+*/
+#define EXTFLASH_NODE	DT_INST(0, st_stm32_ospi_nor)
+#define EXTFLASH_ADDR	CONFIG_STM32_MEMMAP_EXT_FLASH_BASE_ADDRESS
+#define EXTFLASH_SIZE	(DT_PROP(EXTFLASH_NODE, size) / 8)
+
 #else
 
 /*
