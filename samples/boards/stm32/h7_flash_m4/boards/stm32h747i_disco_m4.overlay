@@ -1,0 +1,32 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/ {
+        chosen {
+                zephyr,console = &uart8;
+                zephyr,shell-uart = &uart8;
+                zephyr,flash-controller = &flash1;
+        };
+};
+
+&uart8 {
+        status = "okay";
+        pinctrl-0 = <&uart8_tx_pj8 &uart8_rx_pj9>;
+        pinctrl-names = "default";
+        current-speed = <115200>;
+ };
+
+&flash1 {
+        partitions {
+	        compatible = "fixed-partitions";
+	        #address-cells = <0x1>;
+	        #size-cells = <0x1>;
+                image1_partition: partition@0 {
+                        reg = <0x0 0xc0000>;
+                };
+
+                /* 256KiB scratch pad */
+		scratch_partition: partition@c0000 {
+			reg = <0xc0000 0x40000>;
+		};
+        };
+};

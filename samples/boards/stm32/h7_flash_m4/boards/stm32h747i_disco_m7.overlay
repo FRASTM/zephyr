@@ -1,0 +1,41 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/delete-node/ &storage_partition;
+
+/ {
+        chosen {
+                zephyr,flash-controller = &flash0;
+        };
+};
+
+&quadspi {
+        status = "disabled";
+};
+
+&mt25ql512ab1 {
+        status = "disabled";
+};
+
+&mt25ql512ab2 {
+        status = "disabled";
+};
+
+&flash0 {
+        compatible = "st,stm32-nv-flash", "soc-nv-flash";
+        reg = <0x08000000 DT_SIZE_K(2048)>;
+        partitions {
+                compatible = "fixed-partitions";
+                #address-cells = <0x1>;
+                #size-cells = <0x1>;
+                image1_partition: partition@0 {
+                        reg = <0x0 0x100000>;
+                };
+                image2_partition: partition@100000 {
+                        reg = <0x100000 0xc0000>;
+                };
+                /* 256KiB scratch pad */
+                scratch_partition: partition@1c0000 {
+                        reg = <0x1c0000 0x40000>;
+                };
+        };
+};
