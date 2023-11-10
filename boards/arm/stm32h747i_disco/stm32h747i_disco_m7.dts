@@ -21,6 +21,8 @@
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash0;
 		zephyr,flash-controller = &mt25ql512ab1;
+               /delete-property/ zephyr,flash-controller;
+
 	};
 
 	sdram2: sdram@d0000000 {
