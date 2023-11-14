@@ -89,6 +89,13 @@ int main(void)
 		printk("Unable to get page info\n");
 		return 0;
 	}
+
+	if (info.size > UINT16_MAX) {
+		/* fs.sector_size is a 16bit value */
+		printk("ERROR: sector_size cannot exceed 0xFFFF\n");
+		return 0;
+	}
+
 	fs.sector_size = info.size;
 	fs.sector_count = 3U;
 
