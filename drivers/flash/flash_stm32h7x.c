@@ -606,6 +606,11 @@ void flash_stm32_page_layout(const struct device *dev,
 {
 	ARG_UNUSED(dev);
 
+	if (FLASH_SECTOR_SIZE > 0xFFFF) {
+		/* When using fs (see nvs_mount), the fs->sector_size is a 16bit value */
+		LOG_INF("sector_size (0x%x) exceeds 16bit\n", (uint32_t)FLASH_SECTOR_SIZE);
+	}
+
 #if defined(DUAL_BANK)
 	static struct flash_pages_layout stm32h7_flash_layout[3];
 
