@@ -1,0 +1,17 @@
+/*
+ * Copyright 2023 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * Run the sample on the iwdg of this nucleo board
+ * The PCLK1 (APB1) is too high for wwdg expected timeout
+ */
+&wwdg {
+	status = "disabled";
+};
+
+&iwdg {
+	status = "okay";
+};
