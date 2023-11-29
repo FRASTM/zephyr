@@ -157,6 +157,28 @@ zephyr_udc0: &usbotg_fs {
 	};
 };
 
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x00000000 DT_SIZE_K(64)>;
+		};
+		slot0_partition: partition@00000 {
+			label = "image-0";
+			reg = <0x00000000 DT_SIZE_K(416)>;
+		};
+		/* Set 2KB of storage at the end of first 1MB flash */
+		storage_partition: partition@ff800 {
+			label = "storage";
+			reg = <0x000ff800 DT_SIZE_K(2)>;
+		};
+	};
+};
+
 &sdmmc1 {
 	status = "okay";
 	pinctrl-0 = <&sdmmc1_d0_pc8 &sdmmc1_d1_pc9
@@ -189,7 +211,7 @@ zephyr_udc0: &usbotg_fs {
 
 	n25q128a1: qspi-nor-flash@0 {
 		compatible = "st,stm32-qspi-nor";
-		reg = <0>;
+		reg = <0x90000000 DT_SIZE_M(16)>; /* 128 Mbits */
 		qspi-max-frequency = <72000000>;
 		size = <DT_SIZE_M(16*8)>;
 		status = "okay";
@@ -203,11 +225,6 @@ zephyr_udc0: &usbotg_fs {
 				label = "image-1";
 				reg = <0x00000000 DT_SIZE_K(640)>;
 				};
-
-			storage_partition: partition@a0000 {
-				label = "storage";
-				reg = <0x000a0000 DT_SIZE_M(15)>;
-			};
 		};
 	};
 };
