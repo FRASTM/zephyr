@@ -85,6 +85,7 @@ struct flash_stm32_qspi_config {
 	QUADSPI_TypeDef *regs;
 	struct stm32_pclken pclken;
 	irq_config_func_t irq_config;
+	uint32_t flash_base_address;
 	size_t flash_size;
 	uint32_t max_frequency;
 	const struct pinctrl_dev_config *pcfg;
@@ -382,6 +383,55 @@ static bool qspi_address_is_valid(const struct device *dev, off_t addr,
 	return (addr >= 0) && ((uint64_t)addr + (uint64_t)size <= flash_size);
 }
 
+#ifdef CONFIG_STM32_MEMMAP
+
+/* Function to return true if the quad-NOR flash is in MemoryMapped else false */
+static bool qspi_is_memorymapped(const struct device *dev)
+{
+	struct flash_stm32_qspi_data *dev_data = dev->data;
+
+	return ((READ_BIT(dev_data->hqspi.Instance->CCR,
+			  QUADSPI_CCR_FMODE) == QUADSPI_CCR_FMODE) ?
+			  true : false);
+}
+
+static int qspi_set_memorymap(const struct device *dev)
+{
+	HAL_StatusTypeDef ret;
+	struct flash_stm32_qspi_data *dev_data = dev->data;
+	QSPI_CommandTypeDef s_command = {0};
+	QSPI_MemoryMappedTypeDef s_memmapped_cfg;
+
+	/* Initialize the read command */
+	s_command.Instruction = SPI_NOR_CMD_4READ; /* 0x6B also supported */
+	s_command.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+	s_command.AddressMode = QSPI_ADDRESS_4_LINES;
+#if defined(CONFIG_SOC_SERIES_STM32H7X)
+	s_command.AddressSize = QSPI_ADDRESS_32_BITS;
+#elif defined(CONFIG_SOC_SERIES_STM32F7X)
+	s_command.AddressSize = QSPI_ADDRESS_24_BITS;
+#endif
+	s_command.DataMode = QSPI_DATA_4_LINES;
+	s_command.DummyCycles = SPI_NOR_DUMMY_RD_QUAD;
+
+	/* Enable the memory-mapping */
+	s_memmapped_cfg.TimeOutActivation = QSPI_TIMEOUT_COUNTER_DISABLE;
+	s_memmapped_cfg.TimeOutPeriod = 0;
+
+	ret = HAL_QSPI_MemoryMapped(&dev_data->hqspi, &s_command, &s_memmapped_cfg);
+	if (ret != HAL_OK) {
+		LOG_ERR("%d: Failed to set memory map", ret);
+		return -EIO;
+	}
+
+	if (qspi_is_memorymapped(dev)) {
+		LOG_INF("quad-NOR flash in memory map mode");
+	}
+
+	return 0;
+}
+#endif /* CONFIG_STM32_MEMMAP */
+
 static int flash_stm32_qspi_read(const struct device *dev, off_t addr,
 				 void *data, size_t size)
 {
@@ -398,6 +448,18 @@ static int flash_stm32_qspi_read(const struct device *dev, off_t addr,
 		return 0;
 	}
 
+#ifdef CONFIG_STM32_MEMMAP
+	const struct flash_stm32_qspi_config *dev_cfg = dev->config;
+
+	if (qspi_is_memorymapped(dev)) {
+		LOG_DBG("MemoryMapped Read offset: 0x%lx, len: %zu",
+			dev_cfg->flash_base_address + addr,
+			size);
+		memcpy(data, (uint8_t *)dev_cfg->flash_base_address + addr, size);
+
+		return 0;
+	}
+#endif /* CONFIG_STM32_MEMMAP */
 	QSPI_CommandTypeDef cmd = {
 		.Instruction = SPI_NOR_CMD_READ,
 		.Address = addr,
@@ -456,6 +518,19 @@ static int flash_stm32_qspi_write(const struct device *dev, off_t addr,
 	if (size == 0) {
 		return 0;
 	}
+
+#ifdef CONFIG_STM32_MEMMAP
+	const struct flash_stm32_qspi_config *dev_cfg = dev->config;
+
+	if (qspi_is_memorymapped(dev)) {
+		LOG_DBG("MemoryMapped Write offset: 0x%lx, len: %zu",
+			(long)(dev_cfg->flash_base_address + addr),
+			size);
+		memcpy((uint8_t *)dev_cfg->flash_base_address + addr, data, size);
+
+		return 0;
+	}
+#endif /* CONFIG_STM32_MEMMAP */
 
 	QSPI_CommandTypeDef cmd_write_en = {
 		.Instruction = SPI_NOR_CMD_WREN,
@@ -537,6 +612,13 @@ static int flash_stm32_qspi_erase(const struct device *dev, off_t addr,
 	if (size == 0) {
 		return 0;
 	}
+
+#ifdef CONFIG_STM32_MEMMAP
+	if (qspi_is_memorymapped(dev)) {
+		LOG_INF("MemoryMapped : cannot erase");
+		return 0;
+	}
+#endif /* CONFIG_STM32_MEMMAP */
 
 	QSPI_CommandTypeDef cmd_write_en = {
 		.Instruction = SPI_NOR_CMD_WREN,
@@ -1275,6 +1357,7 @@ static int flash_stm32_qspi_init(const struct device *dev)
 	__ASSERT_NO_MSG(prescaler <= STM32_QSPI_CLOCK_PRESCALER_MAX);
 	/* Initialize QSPI HAL */
 	dev_data->hqspi.Init.ClockPrescaler = prescaler;
+printk("QSPI clock prescaler = %d\n", prescaler);
 	/* Give a bit position from 0 to 31 to the HAL init minus 1 for the DCR1 reg */
 	dev_data->hqspi.Init.FlashSize = find_lsb_set(dev_cfg->flash_size) - 2;
 
@@ -1364,6 +1447,27 @@ static int flash_stm32_qspi_init(const struct device *dev)
 	}
 #endif /* CONFIG_FLASH_PAGE_LAYOUT */
 
+#ifdef CONFIG_STM32_MEMMAP
+	ret = qspi_set_memorymap(dev);
+
+	if (ret != 0) {
+		LOG_ERR("Error (%d): setting NOR in MemoryMapped mode", ret);
+		return -EINVAL;
+	}
+	if ((dev_cfg->flash_base_address == 0) || (dev_cfg->flash_size == 0)) {
+		LOG_ERR("Error wrong NOR base address/size");
+		return -EINVAL;
+	}
+
+	if (qspi_is_memorymapped(dev)) {
+		LOG_INF("NOR in MemoryMapped mode at 0x%x (0x%x bytes)",
+			dev_cfg->flash_base_address,
+			dev_cfg->flash_size);
+	} else {
+		LOG_INF("NOR is NOT in MemoryMapped mode");
+	}
+#endif /* CONFIG_STM32_MEMMAP */
+
 	return 0;
 }
 
@@ -1420,7 +1524,8 @@ static const struct flash_stm32_qspi_config flash_stm32_qspi_cfg = {
 		.bus = DT_CLOCKS_CELL(STM32_QSPI_NODE, bus)
 	},
 	.irq_config = flash_stm32_qspi_irq_config_func,
-	.flash_size = DT_INST_PROP(0, size) / 8U,
+	.flash_base_address = DT_REG_ADDR(DT_INST(0, st_stm32_qspi_nor)),
+	.flash_size = DT_REG_ADDR_BY_IDX(DT_INST(0, st_stm32_qspi_nor), 1),
 	.max_frequency = DT_INST_PROP(0, qspi_max_frequency),
 	.pcfg = PINCTRL_DT_DEV_CONFIG_GET(STM32_QSPI_NODE),
 #if STM32_QSPI_RESET_GPIO
@@ -1435,11 +1540,21 @@ static struct flash_stm32_qspi_data flash_stm32_qspi_dev_data = {
 	.hqspi = {
 		.Instance = (QUADSPI_TypeDef *)DT_REG_ADDR(STM32_QSPI_NODE),
 		.Init = {
+#if defined(CONFIG_SOC_SERIES_STM32H7X)
 			.FifoThreshold = STM32_QSPI_FIFO_THRESHOLD,
+//			.SampleShifting = QSPI_SAMPLE_SHIFTING_HALFCYCLE,
 			.SampleShifting = QSPI_SAMPLE_SHIFTING_NONE,
-			.ChipSelectHighTime = QSPI_CS_HIGH_TIME_1_CYCLE,
+//			.ChipSelectHighTime = QSPI_CS_HIGH_TIME_1_CYCLE,
+			.ChipSelectHighTime = QSPI_CS_HIGH_TIME_3_CYCLE,
+#elif defined(CONFIG_SOC_SERIES_STM32F7X)
+			.FifoThreshold = 4,
+			.SampleShifting = QSPI_SAMPLE_SHIFTING_HALFCYCLE,
+			.ChipSelectHighTime = QSPI_CS_HIGH_TIME_2_CYCLE,
+#endif
 			.ClockMode = QSPI_CLOCK_MODE_0,
-			},
+			.FlashID = QSPI_FLASH_ID_1,
+			.DualFlash = QSPI_DUALFLASH_DISABLE,
+		},
 	},
 	.qer_type = DT_QER_PROP_OR(0, JESD216_DW15_QER_VAL_S1B6),
 	.qspi_write_cmd = DT_WRITEOC_PROP_OR(0, SPI_NOR_CMD_PP_1_4_4),

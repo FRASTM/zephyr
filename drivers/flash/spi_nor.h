@@ -50,7 +50,7 @@
 #define SPI_NOR_CMD_RESET_EN    0x66    /* Reset Enable */
 #define SPI_NOR_CMD_RESET_MEM   0x99    /* Reset Memory */
 #define SPI_NOR_CMD_BULKE       0x60    /* Bulk Erase */
-#define SPI_NOR_CMD_READ_4B      0x13  /* Read data 4 Byte Address */
+#define SPI_NOR_CMD_READ_4B     0x13    /* Read data 4 Byte Address */
 #define SPI_NOR_CMD_READ_FAST_4B 0x0C  /* Fast Read 4 Byte Address */
 #define SPI_NOR_CMD_DREAD_4B     0x3C  /* Read data (1-1-2) 4 Byte Address */
 #define SPI_NOR_CMD_2READ_4B     0xBC  /* Read data (1-2-2) 4 Byte Address */
@@ -59,6 +59,9 @@
 #define SPI_NOR_CMD_PP_4B        0x12  /* Page Program 4 Byte Address */
 #define SPI_NOR_CMD_PP_1_1_4_4B  0x34  /* Quad Page program (1-1-4) 4 Byte Address */
 #define SPI_NOR_CMD_PP_1_4_4_4B  0x3e  /* Quad Page program (1-4-4) 4 Byte Address */
+#define SPI_NOR_CMD_RD_VOL_CFG   0x85  /* Read Volatile config register */
+#define SPI_NOR_CMD_WR_VOL_CFG   0x81  /* Write Volatile config register */
+#define SPI_NOR_CMD_FAST_READ    0xED  /* Fast Read */
 
 /* Flash octal opcodes */
 #define SPI_NOR_OCMD_SE         0x21DE  /* Octal Sector erase */
@@ -93,12 +96,12 @@
 #define SPI_NOR_AUTO_POLLING_INTERVAL   0x10
 
 /* Flash Dummy Cycles values */
+#define SPI_NOR_DUMMY_RD_QUAD          10U
 #define SPI_NOR_DUMMY_RD                8U
 #define SPI_NOR_DUMMY_RD_OCTAL          6U
 #define SPI_NOR_DUMMY_RD_OCTAL_DTR      6U
 #define SPI_NOR_DUMMY_REG_OCTAL         4U
 #define SPI_NOR_DUMMY_REG_OCTAL_DTR     5U
-
 
 /* Memory registers address */
 #define SPI_NOR_REG2_ADDR1              0x0000000
