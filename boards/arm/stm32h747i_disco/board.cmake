@@ -8,4 +8,7 @@ board_runner_args(openocd "--config=${BOARD_DIR}/support/openocd_stm32h747i_disc
 board_runner_args(openocd --target-handle=_CHIPNAME.cpu1)
 endif()
 
+board_runner_args(stm32cubeprogrammer "--erase" "--port=swd" "--reset-mode=hw")
+
+include(${ZEPHYR_BASE}/boards/common/stm32cubeprogrammer.board.cmake)
 include(${ZEPHYR_BASE}/boards/common/openocd.board.cmake)
