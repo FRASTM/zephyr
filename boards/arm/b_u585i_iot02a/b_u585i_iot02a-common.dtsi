@@ -145,10 +145,13 @@ stm32_lp_tick_source: &lptim1 {
 			   #address-cells = <1>;
 			   #size-cells = <1>;
 
-			   /* put image at offset 0 in slot1 */
-			   slot1_partition:partition@0 {
-			       label = "nor";
-			       reg = <0x00000000 DT_SIZE_M(32)>;
+			   slot0_partition: partition@00000 {
+				label = "image-0";
+				reg = <0x00000000 DT_SIZE_K(416)>;
+			   };
+			   slot1_partition: partition@10000 {
+				label = "image-1";
+			   	reg = <0x00010000 DT_SIZE_K(416)>;
 			   };
 		};
 	};
