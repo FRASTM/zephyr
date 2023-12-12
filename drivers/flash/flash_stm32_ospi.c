@@ -1063,6 +1063,7 @@ static int stm32_ospi_set_memorymap(const struct device *dev)
 		LOG_ERR("%d: Failed to set memory mapped", ret);
 		return -EIO;
 	}
+	LOG_INF("MemMapped mode enabled");
 
 	return 0;
 }
@@ -1075,7 +1076,20 @@ static bool stm32_ospi_is_memorymapped(const struct device *dev)
 	return ((READ_BIT(dev_data->hospi.Instance->CR,
 			  OCTOSPI_CR_FMODE) == OCTOSPI_CR_FMODE) ?
 			  true : false);
+}
 
+/* Abort the Memorymapped Mode so that erasing is possible */
+static int stm32_ospi_abort_memmapped(const struct device *dev)
+{
+	struct flash_stm32_ospi_data *dev_data = dev->data;
+
+	if (HAL_OSPI_Abort(&dev_data->hospi) != HAL_OK) {
+		LOG_ERR("OSPI abort failed");
+		return -EIO;
+	}
+	LOG_INF("MemMapped mode disabled");
+
+	return 0;
 }
 #endif /* CONFIG_STM32_MEMMAP */
 
@@ -1115,8 +1129,14 @@ static int flash_stm32_ospi_erase(const struct device *dev, off_t addr,
 
 #ifdef CONFIG_STM32_MEMMAP
 	if (stm32_ospi_is_memorymapped(dev)) {
-		LOG_INF("MemoryMapped : cannot erase");
-		return 0;
+		/* If the Flash is in MemoryMapped mode, abort it */
+		LOG_INF("MemoryMapped : abort before erase");
+
+		if (stm32_ospi_abort_memmapped(dev) != 0) {
+			LOG_ERR("OSPI memory not aborted correctly");
+			return -EIO;
+		}
+	/* Do not forget to restore MemMapped mode afterwards */
 	}
 #endif /* CONFIG_STM32_MEMMAP */
 
@@ -1243,18 +1263,15 @@ static int flash_stm32_ospi_erase(const struct device *dev, off_t addr,
 			ret = stm32_ospi_mem_ready(&dev_data->hospi,
 						   dev_cfg->data_mode, dev_cfg->data_rate);
 		}
-
 	}
 
 end_erase:
 	ospi_unlock_thread(dev);
 
 #ifdef CONFIG_STM32_MEMMAP
-	ret = stm32_ospi_set_memorymap(dev);
-	/*  re-enable MemoryMapped mode */
-	if (ret != 0) {
-		LOG_ERR("Erase failed: cannot enable MemoryMap");
-
+	/* Restore the MemMapped mode after completion */
+	if (stm32_ospi_set_memorymap(dev) != 0) {
+		LOG_ERR("OSPI memory mapped not restored correctly");
 		return -EIO;
 	}
 #endif /* CONFIG_STM32_MEMMAP */
@@ -1282,6 +1299,14 @@ static int flash_stm32_ospi_read(const struct device *dev, off_t addr,
 	}
 
 #ifdef CONFIG_STM32_MEMMAP
+	/* If not MemMapped then configure it */
+	if (!stm32_ospi_is_memorymapped(dev)) {
+		if (!stm32_ospi_set_memorymap(dev)) {
+			LOG_ERR("READ failed: cannot enable MemoryMap");
+			return -EIO;
+		}
+	}
+
 	if (stm32_ospi_is_memorymapped(dev)) {
 		LOG_DBG("MemoryMapped Read offset: 0x%lx, len: %zu",
 			(long)(dev_cfg->flash_base_address + addr),
@@ -1382,6 +1407,14 @@ static int flash_stm32_ospi_write(const struct device *dev, off_t addr,
 	}
 
 #ifdef CONFIG_STM32_MEMMAP
+	/* If not MemMapped then configure it */
+	if (!stm32_ospi_is_memorymapped(dev)) {
+		if (!stm32_ospi_set_memorymap(dev)) {
+			LOG_ERR("WRITE failed: cannot enable MemoryMap");
+			return -EIO;
+		}
+	}
+
 	if (stm32_ospi_is_memorymapped(dev)) {
 		LOG_DBG("MemoryMapped Write offset: 0x%lx, len: %zu",
 			(long)(dev_cfg->flash_base_address + addr),
@@ -2311,6 +2344,7 @@ static int flash_stm32_ospi_init(const struct device *dev)
 	}
 
 	LOG_DBG("Mem Ready (SPI/STR)");
+printk("Mem Ready (SPI/STR)\n");
 
 #if defined(CONFIG_FLASH_JESD216_API)
 	/* Process with the RDID (jedec read ID) instruction at init and fill jedec_id Table */
