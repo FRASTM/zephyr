@@ -14,3 +14,10 @@ project(smp_svr)
 
 target_sources(app PRIVATE src/main.c)
 target_sources_ifdef(CONFIG_MCUMGR_TRANSPORT_BT app PRIVATE src/bluetooth.c)
+
+# sram_code instead runs entirely from SRAM after being copied there.
+zephyr_code_relocate(FILES $ENV{ZEPHYR_BASE}/drivers/flash/flash_stm32_ospi.c LOCATION RAM)
+zephyr_code_relocate(FILES $ENV{ZEPHYR_BASE}/../hal/stm32/stm32cube/stm32u5xx/drivers/src/stm32u5xx_hal_ospi.c LOCATION RAM)
+zephyr_code_relocate(FILES $ENV{ZEPHYR_BASE}/../hal/stm32/stm32cube/stm32u5xx/drivers/src/stm32u5xx_hal_dma.c LOCATION RAM)
+zephyr_code_relocate(FILES $ENV{ZEPHYR_BASE}/../hal/stm32/stm32cube/stm32u5xx/drivers/src/stm32u5xx_hal_dma_ex.c LOCATION RAM)
+zephyr_code_relocate(FILES $ENV{ZEPHYR_BASE}/../hal/stm32/stm32cube/stm32u5xx/drivers/src/stm32u5xx_hal.c LOCATION RAM)

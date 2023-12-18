@@ -21,6 +21,8 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/irq.h>
 
+#include <stm32_ll_dcache.h>
+
 #include "spi_nor.h"
 #include "jesd216.h"
 
@@ -68,6 +70,7 @@ LOG_MODULE_REGISTER(flash_stm32_ospi, CONFIG_FLASH_LOG_LEVEL);
 #define STM32_OSPI_SECTOR_ERASE_MAX_TIME        1000U
 #define STM32_OSPI_SUBSECTOR_4K_ERASE_MAX_TIME  400U
 #define STM32_OSPI_WRITE_REG_MAX_TIME           40U
+#define STM32_OSPI_SECTOR_WRITE_MAX_TIME        2000U
 
 /* used as default value for DTS writeoc */
 #define SPI_NOR_WRITEOC_NONE 0xFF
@@ -957,6 +960,95 @@ static int stm32_ospi_mem_reset(const struct device *dev)
 }
 
 #ifdef CONFIG_STM32_MEMMAP
+/* This function enables the MemoryMapped Mode just before writing */
+static int stm32_ospi_enable_memorymap(const struct device *dev)
+{
+	HAL_StatusTypeDef ret;
+	struct flash_stm32_ospi_data *dev_data = dev->data;	OSPI_AutoPollingTypeDef s_config = {0};
+	OSPI_RegularCmdTypeDef s_command = {0};
+	OSPI_MemoryMappedTypeDef s_MemMappedCfg = {0};
+
+	/* Send the write Enable command */
+	s_command.OperationType = HAL_OSPI_OPTYPE_COMMON_CFG;
+	s_command.FlashId = HAL_OSPI_FLASH_ID_1;
+	s_command.InstructionMode =  HAL_OSPI_INSTRUCTION_8_LINES;
+	s_command.InstructionDtrMode = HAL_OSPI_INSTRUCTION_DTR_DISABLE;
+	s_command.InstructionSize = HAL_OSPI_INSTRUCTION_16_BITS;
+	s_command.AddressMode = HAL_OSPI_ADDRESS_NONE;
+	s_command.AlternateBytesMode = HAL_OSPI_ALTERNATE_BYTES_NONE;
+	s_command.DataMode = HAL_OSPI_DATA_NONE;
+	s_command.DataDtrMode = HAL_OSPI_DATA_DTR_DISABLE;
+	s_command.SIOOMode = HAL_OSPI_SIOO_INST_EVERY_CMD;
+	s_command.DQSMode = HAL_OSPI_DQS_DISABLE;
+	s_command.Instruction = SPI_NOR_OCMD_WREN;
+	s_command.DummyCycles = 0;
+
+	ret = HAL_OSPI_Command(&dev_data->hospi, &s_command, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
+	if (ret != HAL_OK) {
+		LOG_ERR("%d: Failed to enable write op", ret);
+		return -EIO;
+	}
+
+	/* Send the auto-polling command */
+	s_command.Instruction = SPI_NOR_OCMD_RDSR;
+	s_command.AddressMode = HAL_OSPI_ADDRESS_8_LINES;
+	s_command.AddressSize = HAL_OSPI_ADDRESS_32_BITS;
+	s_command.AddressDtrMode = HAL_OSPI_ADDRESS_DTR_DISABLE;	s_command.Address = 0;
+	s_command.DataMode = HAL_OSPI_DATA_8_LINES;
+	s_command.NbData = 1;
+	s_command.DummyCycles = SPI_NOR_DUMMY_REG_OCTAL;
+
+	/* Set the mask and match bits */
+	s_config.Match              = SPI_NOR_WREN_MATCH;
+	s_config.Mask               = SPI_NOR_WREN_MASK;
+	s_config.MatchMode          = HAL_OSPI_MATCH_MODE_AND;
+	s_config.Interval           = SPI_NOR_AUTO_POLLING_INTERVAL;
+	s_config.AutomaticStop      = HAL_OSPI_AUTOMATIC_STOP_ENABLE;
+
+	/* Start Automatic-Polling mode to wait until the memory is ready WIP=0 */
+	if (HAL_OSPI_AutoPolling(&dev_data->hospi, &s_config, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
+		LOG_ERR("OSPI AutoPoll failed");
+		return -EIO;
+	}
+
+	/* Initialize the program command */
+	s_command.OperationType = HAL_OSPI_OPTYPE_WRITE_CFG;
+	s_command.Instruction = SPI_NOR_OCMD_PAGE_PRG;
+	s_command.DummyCycles = 0;
+	s_command.DQSMode = HAL_OSPI_DQS_ENABLE;
+
+	ret = HAL_OSPI_Command(&dev_data->hospi, &s_command, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
+	if (ret != HAL_OK) {
+		LOG_ERR("%d: Failed to set memory mapped", ret);
+		return -EIO;
+	}
+
+	/* Initialize the read command */
+	s_command.OperationType = HAL_OSPI_OPTYPE_READ_CFG;
+	s_command.Instruction = SPI_NOR_OCMD_RD;
+	s_command.DQSMode = HAL_OSPI_DQS_DISABLE;
+	s_command.DummyCycles = SPI_NOR_DUMMY_RD_OCTAL_DTR;
+
+	ret = HAL_OSPI_Command(&dev_data->hospi, &s_command, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
+	if (ret != HAL_OK) {
+		LOG_ERR("%d: Failed to set memory map", ret);
+		return -EIO;
+	}
+
+	/* Enable the memory-mapping */
+	s_MemMappedCfg.TimeOutActivation = HAL_OSPI_TIMEOUT_COUNTER_DISABLE;
+
+	ret = HAL_OSPI_MemoryMapped(&dev_data->hospi, &s_MemMappedCfg);
+	if (ret != HAL_OK) {
+		LOG_ERR("%d: Failed to set memory mapped", ret);
+		return -EIO;
+	}
+	LOG_INF("MemMapped mode enabled");
+
+	return 0;
+}
+
+/* Function to configure the octoflash in MemoryMapped */
 static int stm32_ospi_set_memorymap(const struct device *dev)
 {
 	HAL_StatusTypeDef ret;
@@ -969,7 +1061,7 @@ static int stm32_ospi_set_memorymap(const struct device *dev)
 	if ((dev_cfg->data_mode == OSPI_SPI_MODE) &&
 		(stm32_ospi_hal_address_size(dev) == HAL_OSPI_ADDRESS_24_BITS)) {
 		/* OPI mode and 3-bytes address size not supported by memory */
-		LOG_ERR("OSPI_SPI_MODE in 3Bytes addressing is not supported");
+		LOG_ERR("MemMapped in 3Bytes addressing is not supported");
 		return -EIO;
 	}
 
@@ -1028,9 +1120,10 @@ static int stm32_ospi_set_memorymap(const struct device *dev)
 
 	s_command.SIOOMode = HAL_OSPI_SIOO_INST_EVERY_CMD;
 
+
 	ret = HAL_OSPI_Command(&dev_data->hospi, &s_command, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
 	if (ret != HAL_OK) {
-		LOG_ERR("%d: Failed to set memory map", ret);
+		LOG_ERR("MemMapped : Failed to set memory map");
 		return -EIO;
 	}
 
@@ -1051,7 +1144,7 @@ static int stm32_ospi_set_memorymap(const struct device *dev)
 
 	ret = HAL_OSPI_Command(&dev_data->hospi, &s_command, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
 	if (ret != HAL_OK) {
-		LOG_ERR("%d: Failed to set memory mapped", ret);
+		LOG_ERR("MemMapped : Failed to set memory mapped");
 		return -EIO;
 	}
 
@@ -1060,7 +1153,7 @@ static int stm32_ospi_set_memorymap(const struct device *dev)
 
 	ret = HAL_OSPI_MemoryMapped(&dev_data->hospi, &s_MemMappedCfg);
 	if (ret != HAL_OK) {
-		LOG_ERR("%d: Failed to set memory mapped", ret);
+		LOG_ERR("MemMapped : Failed to set MemMapped");
 		return -EIO;
 	}
 	LOG_INF("MemMapped mode enabled");
@@ -1069,7 +1162,7 @@ static int stm32_ospi_set_memorymap(const struct device *dev)
 }
 
 /* Function to return true if the octoflash is in MemoryMapped else false */
-static bool stm32_ospi_is_memorymapped(const struct device *dev)
+static bool stm32_ospi_is_memorymap(const struct device *dev)
 {
 	struct flash_stm32_ospi_data *dev_data = dev->data;
 
@@ -1078,16 +1171,18 @@ static bool stm32_ospi_is_memorymapped(const struct device *dev)
 			  true : false);
 }
 
-/* Abort the Memorymapped Mode so that erasing is possible */
-static int stm32_ospi_abort_memmapped(const struct device *dev)
+/* Abort the MemoryMapped Mode so that erasing is possible */
+static int stm32_ospi_abort_memorymap(const struct device *dev)
 {
+	int ret = 0;
 	struct flash_stm32_ospi_data *dev_data = dev->data;
 
-	if (HAL_OSPI_Abort(&dev_data->hospi) != HAL_OK) {
-		LOG_ERR("OSPI abort failed");
+	ret = HAL_OSPI_Abort(&dev_data->hospi);
+	if (ret != HAL_OK) {
+		LOG_ERR("MemMapped abort failed %d", ret);
 		return -EIO;
 	}
-	LOG_INF("MemMapped mode disabled");
+	LOG_DBG("MemMapped mode disabled");
 
 	return 0;
 }
@@ -1128,15 +1223,15 @@ static int flash_stm32_ospi_erase(const struct device *dev, off_t addr,
 	}
 
 #ifdef CONFIG_STM32_MEMMAP
-	if (stm32_ospi_is_memorymapped(dev)) {
-		/* If the Flash is in MemoryMapped mode, abort it */
-		LOG_INF("MemoryMapped : abort before erase");
+	/* If the Flash is in MemoryMapped mode, abort it and proceed erase */
+	if (stm32_ospi_is_memorymap(dev)) {
+		LOG_INF("MemMapped : abort before erase");
+printk("MemMapped : abort before erase addr=0x%x ; offset=%d", addr,size);
 
-		if (stm32_ospi_abort_memmapped(dev) != 0) {
-			LOG_ERR("OSPI memory not aborted correctly");
+		if (stm32_ospi_abort_memorymap(dev) != 0) {
+			LOG_ERR("MemMapped not aborted correctly addr=0x%x ; offset=%d", addr,size);
 			return -EIO;
 		}
-	/* Do not forget to restore MemMapped mode afterwards */
 	}
 #endif /* CONFIG_STM32_MEMMAP */
 
@@ -1268,11 +1363,14 @@ static int flash_stm32_ospi_erase(const struct device *dev, off_t addr,
 end_erase:
 	ospi_unlock_thread(dev);
 
+	LOG_INF("Erase complete");
 #ifdef CONFIG_STM32_MEMMAP
-	/* Restore the MemMapped mode after completion */
-	if (stm32_ospi_set_memorymap(dev) != 0) {
-		LOG_ERR("OSPI memory mapped not restored correctly");
-		return -EIO;
+	/* Now configure the octo Flash in MemoryMapped (access by address) */
+	ret = stm32_ospi_set_memorymap(dev);
+
+	if (ret != 0) {
+		LOG_ERR("Error (%d): setting NOR in MemMapped mode", ret);
+		return -EINVAL;
 	}
 #endif /* CONFIG_STM32_MEMMAP */
 
@@ -1300,15 +1398,15 @@ static int flash_stm32_ospi_read(const struct device *dev, off_t addr,
 
 #ifdef CONFIG_STM32_MEMMAP
 	/* If not MemMapped then configure it */
-	if (!stm32_ospi_is_memorymapped(dev)) {
-		if (!stm32_ospi_set_memorymap(dev)) {
-			LOG_ERR("READ failed: cannot enable MemoryMap");
+	if (!stm32_ospi_is_memorymap(dev)) {
+		if (stm32_ospi_set_memorymap(dev) != 0) {
+			LOG_ERR("MemMapped Read failed: cannot enable MemoryMap");
 			return -EIO;
 		}
 	}
 
-	if (stm32_ospi_is_memorymapped(dev)) {
-		LOG_DBG("MemoryMapped Read offset: 0x%lx, len: %zu",
+	if (stm32_ospi_is_memorymap(dev)) {
+		LOG_DBG("MemMapped Read offset: 0x%lx, len: %zu",
 			(long)(dev_cfg->flash_base_address + addr),
 			size);
 
@@ -1407,23 +1505,47 @@ static int flash_stm32_ospi_write(const struct device *dev, off_t addr,
 	}
 
 #ifdef CONFIG_STM32_MEMMAP
-	/* If not MemMapped then configure it */
-	if (!stm32_ospi_is_memorymapped(dev)) {
-		if (!stm32_ospi_set_memorymap(dev)) {
+	/* If MemoryMapped then abort it and then proceed with write*/
+	if (stm32_ospi_is_memorymap(dev)) {
+		LOG_INF("MemMapped : abort before write");
+printk("MemMapped : abort before write addr=0x%x ; size=%d", addr,size);
+
+//		if (stm32_ospi_abort_memorymap(dev) != 0) {
+//			LOG_ERR("MemMapped write : not aborted correctly");
+//			return -EIO;
+//		}
+	}
+#if 1
+unsigned int key = irq_lock();
+	/* If not MemoryMapped then configure it for writing */
+	if (!stm32_ospi_is_memorymap(dev)) {
+		LOG_INF("MemMapped : config before write");
+
+//stm32_ospi_mem_ready(&dev_data->hospi, dev_cfg->data_mode, dev_cfg->data_rate);
+//stm32_ospi_write_enable(&dev_data->hospi, dev_cfg->data_mode, dev_cfg->data_rate);
+//stm32_ospi_enable_memorymap(dev);
+/*
+if (stm32_ospi_set_memorymap(dev) != 0) {
 			LOG_ERR("WRITE failed: cannot enable MemoryMap");
 			return -EIO;
 		}
+*/
 	}
 
-	if (stm32_ospi_is_memorymapped(dev)) {
-		LOG_DBG("MemoryMapped Write offset: 0x%lx, len: %zu",
+	if (stm32_ospi_is_memorymap(dev)) {
+printk("MemMapped : write addr=0x%x ; size=%d", dev_cfg->flash_base_address + addr,size);
+
+		LOG_DBG("MemMapped Write offset: 0x%lx, len: %zu",
 			(long)(dev_cfg->flash_base_address + addr),
 			size);
 
 		memcpy((uint8_t *)dev_cfg->flash_base_address + addr, data, size);
-
+irq_unlock(key);
+//LL_DCACHE_Invalidate(DCACHE1);
+k_busy_wait(STM32_OSPI_SECTOR_WRITE_MAX_TIME);
 		return 0;
 	}
+#endif
 #endif /* CONFIG_STM32_MEMMAP */
 	/* page program for STR or DTR mode */
 	OSPI_RegularCmdTypeDef cmd_pp = ospi_prepare_cmd(dev_cfg->data_mode, dev_cfg->data_rate);
@@ -1519,6 +1641,17 @@ static int flash_stm32_ospi_write(const struct device *dev, off_t addr,
 	}
 
 	ospi_unlock_thread(dev);
+
+	LOG_DBG("Write complete");
+#ifdef CONFIG_STM32_MEMMAP
+	/* Now configure the octo Flash in MemoryMapped (access by address) */
+	ret = stm32_ospi_set_memorymap(dev);
+
+	if (ret != 0) {
+		LOG_ERR("Error (%d): setting NOR in MemMapped mode", ret);
+		return -EINVAL;
+	}
+#endif /* CONFIG_STM32_MEMMAP */
 
 	return ret;
 }
@@ -2089,6 +2222,17 @@ static int flash_stm32_ospi_init(const struct device *dev)
 		return -ENODEV;
 	}
 
+#if 0
+#ifdef CONFIG_STM32_MEMMAP
+	/* If MemoryMapped then configure skip init */
+	if (stm32_ospi_is_memorymap(dev)) {
+printk("NOR init'd in MemMapped mode\n");
+		dev_data->hospi.State = HAL_OSPI_STATE_BUSY_MEM_MAPPED;
+		return 0;
+	}
+#endif /* CONFIG_STM32_MEMMAP */
+#endif
+
 #if STM32_OSPI_USE_DMA
 	/*
 	 * DMA configuration
@@ -2260,6 +2404,15 @@ static int flash_stm32_ospi_init(const struct device *dev)
 #if defined(OCTOSPI_DCR4_REFRESH)
 	dev_data->hospi.Init.Refresh = 0;
 #endif /* OCTOSPI_DCR4_REFRESH */
+
+#ifdef CONFIG_STM32_MEMMAP
+	/* If MemoryMapped then configure skip init */
+	if (stm32_ospi_is_memorymap(dev)) {
+printk("NOR init'd in MemMapped mode\n");
+		dev_data->hospi.State = HAL_OSPI_STATE_BUSY_MEM_MAPPED;
+		return 0;
+	}
+#endif /* CONFIG_STM32_MEMMAP */
 
 	if (HAL_OSPI_Init(&dev_data->hospi) != HAL_OK) {
 		LOG_ERR("OSPI Init failed");
@@ -2437,18 +2590,21 @@ printk("Mem Ready (SPI/STR)\n");
 #ifdef CONFIG_STM32_MEMMAP
 	/* Now configure the octo Flash in MemoryMapped (access by address) */
 	ret = stm32_ospi_set_memorymap(dev);
-
 	if (ret != 0) {
-		LOG_ERR("Error (%d): setting NOR in MemoryMapped mode", ret);
+		LOG_ERR("Error (%d): setting NOR in MemMapped mode", ret);
 		return -EINVAL;
 	}
 	if ((dev_cfg->flash_base_address == 0) || (dev_cfg->flash_size == 0)) {
 		LOG_ERR("Error wrong NOR base address/size");
 		return -EINVAL;
 	}
-	LOG_INF("NOR in MemoryMapped mode at 0x%x (0x%x bytes)",
+	LOG_INF("NOR in MemMapped mode at 0x%x (0x%x bytes)",
 		dev_cfg->flash_base_address,
 		dev_cfg->flash_size);
+printk("NOR in MemMapped mode at 0x%x (0x%x bytes)\n",
+		dev_cfg->flash_base_address,
+		dev_cfg->flash_size);
+
 
 #endif /* CONFIG_STM32_MEMMAP */
 	return 0;

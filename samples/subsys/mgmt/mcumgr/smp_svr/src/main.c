@@ -83,7 +83,7 @@ int main(void)
 	/* using __TIME__ ensure that a new binary will be built on every
 	 * compile which is convenient when testing firmware upgrade.
 	 */
-	LOG_INF("build time: " __DATE__ " " __TIME__);
+	LOG_INF("ZEPHYR build time: " __DATE__ " " __TIME__);
 
 	/* The system work queue handles all incoming mcumgr requests.  Let the
 	 * main thread idle while the mcumgr server runs.

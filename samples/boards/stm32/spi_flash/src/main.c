@@ -19,13 +19,30 @@
 #define SPI_FLASH_MULTI_SECTOR_TEST
 #endif
 
+volatile uint8_t buf[4];
+//volatile uint8_t expected[17*1024];
+//uint16_t len = sizeof(expected);
+
+//const uint8_t *re = (uint8_t *)0x008010000;
+
+const uint8_t expected[] = { 0x55, 0xaa, 0xa5, 0x5a };
+const size_t len = sizeof(expected);
+
+
 void single_sector_test(const struct device *flash_dev)
 {
-	const uint8_t expected[] = { 0x55, 0xaa, 0x66, 0x99 };
-	const size_t len = sizeof(expected);
-	uint8_t buf[256];
+
 	int rc;
-#if 0
+/*
+	for (uint16_t index = 0; index < len; index++) {
+		expected[index] = *re;
+		re++;
+	}
+
+*/
+
+#if 1
+
 	printf("\nPerform test on single sector");
 	/* Write protection needs to be disabled before each write or
 	 * erase, since the flash component turns on write protection
@@ -37,8 +54,7 @@ void single_sector_test(const struct device *flash_dev)
 	/* Full flash erase if SPI_FLASH_TEST_REGION_OFFSET = 0 and
 	 * SPI_FLASH_SECTOR_SIZE = flash size
 	 */
-	rc = flash_erase(flash_dev, SPI_FLASH_TEST_REGION_OFFSET,
-			 SPI_FLASH_SECTOR_SIZE);
+	rc = flash_erase(flash_dev, 0x100000, 425984);
 	if (rc != 0) {
 		printf("Flash erase failed! %d\n", rc);
 	} else {
@@ -55,19 +71,20 @@ void single_sector_test(const struct device *flash_dev)
 	}
 
 #endif
-	memset(buf, 0, len);
-	rc = flash_read(flash_dev, 0, buf, len);
+	memset(buf, 0, 4);
+	rc = flash_read(flash_dev, 0, buf, 4);
 	if (rc != 0) {
 		printf("Flash read failed! %d\n", rc);
 		return;
 	}
 
-	if (memcmp(expected, buf, len) == 0) {
+	if (memcmp(expected, buf, 4) == 0) {
 		printf("Data read matches data written. Good!!\n");
 	} else {
 		const uint8_t *wp = expected;
 		const uint8_t *rp = buf;
-		const uint8_t *rpe = rp + len;
+//		const uint8_t *rpe = rp + len;
+		const uint8_t *rpe = rp + 4;
 
 		printf("Data read does not match data written!!\n");
 		while (rp < rpe) {
