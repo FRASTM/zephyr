@@ -13,4 +13,9 @@ void function_in_ext_flash(void)
 {
 	printk("Address of %s %p\n", __func__, &function_in_ext_flash);
 	printk("Address of var_ext_sram_data %p (%d)\n", &var_ext_sram_data, var_ext_sram_data);
+
+	for (uint8_t i = 0; i<100; i++) {
+	 var_ext_sram_data++;
+	}
+
 }

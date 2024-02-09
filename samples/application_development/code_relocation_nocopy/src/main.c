@@ -7,6 +7,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
+#include <zephyr/cache.h>
 
 /*
  * This function will allow execute from sram region.  This is needed only for
@@ -50,8 +51,13 @@ int main(void)
 
 	printk("Address of %s function %p\n", __func__, &main);
 
+sys_cache_instr_invd_all();
+sys_cache_instr_disable();
+
 	function_in_ext_flash();
 	function_in_sram();
+	
+sys_cache_instr_enable();
 
 	printk("Hello World! %s\n", CONFIG_BOARD);
 	return 0;

@@ -1481,15 +1481,6 @@ static int flash_stm32_qspi_init(const struct device *dev)
 	/* Set Dual Flash Mode only on MemoryMapped */
 	dev_data->hqspi.Init.FlashID = QSPI_FLASH_ID_2;
 #endif /* ! flash_id */
-#endif
-	HAL_QSPI_Init(&dev_data->hqspi);
-
-#if DT_NODE_HAS_PROP(DT_NODELABEL(quadspi), flash_id) && defined(QUADSPI_CR_DFM)
-	uint8_t qspi_flash_id = DT_PROP(DT_NODELABEL(quadspi), flash_id);
-
-	HAL_QSPI_SetFlashID(&dev_data->hqspi,
-			    (qspi_flash_id - 1) << QUADSPI_CR_FSEL_Pos);
-#endif /* flash_id */
 	/* Initialize semaphores */
 	k_sem_init(&dev_data->sem, 1, 1);
 	k_sem_init(&dev_data->sync, 0, 1);
@@ -1575,6 +1566,9 @@ static int flash_stm32_qspi_init(const struct device *dev)
 	LOG_DBG("Dual Flash Mode");
 	/*  When the DTS has a FlashID --> not Dual Flash */
 #endif /* !flash_id */
+
+	ret = qspi_set_memorymap(dev);
+#endif /* CONFIG_STM32_MEMMAP */
 
 #ifdef CONFIG_SOC_SERIES_STM32H7X
 
