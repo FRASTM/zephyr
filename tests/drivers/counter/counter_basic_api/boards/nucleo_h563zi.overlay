@@ -6,9 +6,11 @@
 };
 
 &timers3 {
+	/* used by pwmleds */
 	st,prescaler = <239>;
+	status = "disabled";
 	counter {
-		status = "okay";
+		status = "disabled";
 	};
 };
 
