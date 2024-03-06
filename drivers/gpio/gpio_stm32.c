@@ -292,6 +292,7 @@ static int gpio_stm32_clock_request(const struct device *dev, bool on)
 	return ret;
 }
 
+
 static inline uint32_t gpio_stm32_pin_to_exti_line(int pin)
 {
 #if defined(CONFIG_SOC_SERIES_STM32L0X) || \
@@ -299,11 +300,20 @@ static inline uint32_t gpio_stm32_pin_to_exti_line(int pin)
 	return ((pin % 4 * 4) << 16) | (pin / 4);
 #elif DT_HAS_COMPAT_STATUS_OKAY(st_stm32g0_exti)
 	return ((pin & 0x3) << (16 + 3)) | (pin >> 2);
+#elif DT_HAS_COMPAT_STATUS_OKAY(st_stm32h7rs_exti)
+	/*
+	 * No need to translate pin to a LL_SBS_EXTI_LINEn value
+	 * as the gpio_stm32_set_exti_source does not call LL_SBS_SetEXTISource
+	 * but uses HAL formula : keep pin value [0..15]
+	 */
+	return (uint32_t)pin;
 #else
 	return (0xF << ((pin % 4 * 4) + 16)) | (pin / 4);
 #endif
 }
 
+
+/* Set the EXTI line corresponding to the PORT [STM32_PORTA .. ] and pin [0..15] */
 static void gpio_stm32_set_exti_source(int port, int pin)
 {
 	uint32_t line = gpio_stm32_pin_to_exti_line(pin);
@@ -326,12 +336,20 @@ static void gpio_stm32_set_exti_source(int port, int pin)
 
 #elif DT_HAS_COMPAT_STATUS_OKAY(st_stm32g0_exti)
 	LL_EXTI_SetEXTISource(port, line);
+#elif DT_HAS_COMPAT_STATUS_OKAY(st_stm32h7rs_exti)
+	/* 'port' is of LL_SBS_EXTI_PORTx, 'line' is the pin value [0..15] */
+	/* Using HAL formula when setting the gpio port during HAL_EXTI_SetConfigLine */
+	uint32_t regval = SBS->EXTICR[line >> 2U];
+	regval &= ~(SBS_EXTICR1_PC_EXTI0 << (SBS_EXTICR1_PC_EXTI1_Pos * (line & 0x03u)));
+	regval |= (port << (SBS_EXTICR1_PC_EXTI1_Pos * (line & 0x03u)));
+	SBS->EXTICR[line >> 2u] = regval;
 #else
 	LL_SYSCFG_SetEXTISource(port, line);
 #endif
 	z_stm32_hsem_unlock(CFG_HW_EXTI_SEMID);
 }
 
+/* Gives the PORT [STM32_PORTA .. ] corresponding to the EXTI line of the pin [0..15] */
 static int gpio_stm32_get_exti_source(int pin)
 {
 	uint32_t line = gpio_stm32_pin_to_exti_line(pin);
@@ -341,6 +359,11 @@ static int gpio_stm32_get_exti_source(int pin)
 	port = LL_GPIO_AF_GetEXTISource(line);
 #elif DT_HAS_COMPAT_STATUS_OKAY(st_stm32g0_exti)
 	port = LL_EXTI_GetEXTISource(line);
+#elif DT_HAS_COMPAT_STATUS_OKAY(st_stm32h7rs_exti)
+	/* Using the HAL formula when HAL_EXTI_GetConfigLine : 'line' is the pin value [0..15] */
+	uint32_t regval = SBS->EXTICR[line >> 2u];
+	port = (regval >> (SBS_EXTICR1_PC_EXTI1_Pos * (line & 0x03u))) & SBS_EXTICR1_PC_EXTI0;
+	/* Get Gpio port selection for gpio lines */
 #else
 	port = LL_SYSCFG_GetEXTISource(line);
 #endif
@@ -369,14 +392,18 @@ static int gpio_stm32_enable_int(int port, int pin)
 	defined(CONFIG_SOC_SERIES_STM32F4X) || \
 	defined(CONFIG_SOC_SERIES_STM32F7X) || \
 	defined(CONFIG_SOC_SERIES_STM32H7X) || \
+	defined(CONFIG_SOC_SERIES_STM32H7RSX) || \
 	defined(CONFIG_SOC_SERIES_STM32L1X) || \
 	defined(CONFIG_SOC_SERIES_STM32L4X) || \
 	defined(CONFIG_SOC_SERIES_STM32G4X)
 	const struct device *const clk = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE);
 	struct stm32_pclken pclken = {
-#ifdef CONFIG_SOC_SERIES_STM32H7X
+#if defined(CONFIG_SOC_SERIES_STM32H7X)
 		.bus = STM32_CLOCK_BUS_APB4,
 		.enr = LL_APB4_GRP1_PERIPH_SYSCFG
+#elif defined(CONFIG_SOC_SERIES_STM32H7RSX)
+		.bus = STM32_CLOCK_BUS_APB4,
+		.enr = LL_APB4_GRP1_PERIPH_SBS
 #else
 		.bus = STM32_CLOCK_BUS_APB2,
 		.enr = LL_APB2_GRP1_PERIPH_SYSCFG
@@ -717,6 +744,10 @@ static int gpio_stm32_init(const struct device *dev)
 	/* Cf: L4/L5 RM, Chapter "Independent I/O supply rail" */
 	LL_PWR_EnableVddIO2();
 	z_stm32_hsem_unlock(CFG_HW_RCC_SEMID);
+#elif defined(CONFIG_SOC_SERIES_STM32H7RSX)
+	/* TBC : stm32Cube does */
+	LL_PWR_EnableXSPIM1();
+	LL_PWR_EnableUSBVoltageDetector();
 #endif
 	/* enable port clock (if runtime PM is not enabled) */
 	ret = gpio_stm32_clock_request(dev, !IS_ENABLED(CONFIG_PM_DEVICE_RUNTIME));
@@ -803,3 +834,16 @@ GPIO_DEVICE_INIT_STM32(j, J);
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(gpiok), okay)
 GPIO_DEVICE_INIT_STM32(k, K);
 #endif /* DT_NODE_HAS_STATUS(DT_NODELABEL(gpiok), okay) */
+
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(gpiom), okay)
+GPIO_DEVICE_INIT_STM32(m, M);
+#endif /* DT_NODE_HAS_STATUS(DT_NODELABEL(gpiom), okay) */
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(gpion), okay)
+GPIO_DEVICE_INIT_STM32(n, N);
+#endif /* DT_NODE_HAS_STATUS(DT_NODELABEL(gpion), okay) */
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(gpioo), okay)
+GPIO_DEVICE_INIT_STM32(o, O);
+#endif /* DT_NODE_HAS_STATUS(DT_NODELABEL(gpioo), okay) */
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(gpiop), okay)
+GPIO_DEVICE_INIT_STM32(p, P);
+#endif /* DT_NODE_HAS_STATUS(DT_NODELABEL(gpiop), okay) */
