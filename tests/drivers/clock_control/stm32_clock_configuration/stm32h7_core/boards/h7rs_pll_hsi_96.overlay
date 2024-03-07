@@ -1,0 +1,38 @@
+/*
+ * Copyright (c) 2025 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * Warning: This overlay performs configuration from clean sheet.
+ * It is assumed that it is applied after h7rs_clear_clocks.overlay file.
+ */
+
+&clk_hsi {
+	hsi-div = <1>;	/* HSI RC: 64MHz, hsi-div not use for pll input clock */
+	status = "okay";
+};
+
+&pll {
+	div-m = <4>;
+	mul-n = <36>;
+	div-p = <6>;
+	div-q = <5>;
+	div-r = <2>;
+	div-s = <2>;
+	div-t = <2>;
+	clocks = <&clk_hsi>;
+	status = "okay";
+};
+
+&rcc {
+	clocks = <&pll>;
+	clock-frequency = <DT_FREQ_M(96)>;
+	dcpre = <1>;
+	hpre = <1>;
+	ppre1 = <1>;
+	ppre2 = <1>;
+	ppre4 = <1>;
+	ppre5 = <1>;
+};

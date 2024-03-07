@@ -1,0 +1,40 @@
+/*
+ * Copyright (c) 2025 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * Warning: This overlay performs configuration from clean sheet.
+ * It is assumed that it is applied after h7rs_clear_clocks.overlay file.
+ * Datasheet DS14359 rev 1 gives CPU max freq of 500MHz
+ */
+
+&clk_hse {
+	hse-bypass;
+	clock-frequency = <DT_FREQ_M(24)>;
+	status = "okay";
+};
+
+&pll {
+	div-m = <6>;
+	mul-n = <250>;
+	div-p = <2>;
+	div-q = <4>;
+	div-r = <4>;
+	div-s = <4>;
+	div-t = <4>;
+	clocks = <&clk_hse>;
+	status = "okay";
+};
+
+&rcc {
+	clocks = <&pll>;
+	clock-frequency = <DT_FREQ_M(500)>;
+	dcpre = <1>;
+	hpre = <2>;   /* HCLK: 250 MHz */
+	ppre1 = <2>;  /* APB1: 125 MHz */
+	ppre2 = <2>;  /* APB2: 125 MHz */
+	ppre4 = <2>;  /* APB4: 125 MHz */
+	ppre5 = <2>;  /* APB5: 125 MHz */
+};

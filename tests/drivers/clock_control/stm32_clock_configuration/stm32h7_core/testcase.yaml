@@ -1,37 +1,42 @@
 common:
   timeout: 5
   tags: clock_control
-
 tests:
   drivers.clock.stm32_clock_configuration.h7_core.sysclksrc_pll_hse_96:
     extra_args: DTC_OVERLAY_FILE="boards/clear_clocks.overlay;boards/pll_hse_96.overlay"
-    platform_allow: nucleo_h743zi
+    platform_allow:
+      - nucleo_h743zi
     integration_platforms:
       - nucleo_h743zi
   drivers.clock.stm32_clock_configuration.h7_core.sysclksrc_pll_hsi_96:
     extra_args: DTC_OVERLAY_FILE="boards/clear_clocks.overlay;boards/pll_hsi_96.overlay"
-    platform_allow: nucleo_h743zi
+    platform_allow:
+      - nucleo_h743zi
     integration_platforms:
       - nucleo_h743zi
   drivers.clock.stm32_clock_configuration.h7_core.sysclksrc_hsi_64:
     extra_args: DTC_OVERLAY_FILE="boards/clear_clocks.overlay;boards/hsi_64.overlay"
-    platform_allow: nucleo_h743zi
+    platform_allow:
+      - nucleo_h743zi
     integration_platforms:
       - nucleo_h743zi
   drivers.clock.stm32_clock_configuration.h7_core.sysclksrc_csi_4:
     extra_args: DTC_OVERLAY_FILE="boards/clear_clocks.overlay;boards/csi_4.overlay"
-    platform_allow: nucleo_h743zi
+    platform_allow:
+      - nucleo_h743zi
     integration_platforms:
       - nucleo_h743zi
   drivers.clock.stm32_clock_configuration.h7_core.sysclksrc_hse_8:
     extra_args: DTC_OVERLAY_FILE="boards/clear_clocks.overlay;boards/hse_8.overlay"
-    platform_allow: nucleo_h743zi
+    platform_allow:
+      - nucleo_h743zi
     integration_platforms:
       - nucleo_h743zi
   drivers.clock.stm32_clock_configuration.h7_core.sysclksrc_hse_8_css:
     extra_args:
       DTC_OVERLAY_FILE="boards/clear_clocks.overlay;boards/hse_8.overlay;boards/hse_css.overlay"
-    platform_allow: nucleo_h743zi
+    platform_allow:
+      - nucleo_h743zi
     integration_platforms:
       - nucleo_h743zi
   drivers.clock.stm32_clock_configuration.h7_core.sysclksrc_pll_csi_96:
@@ -53,3 +58,75 @@ tests:
       - stm32h735g_disco
     integration_platforms:
       - nucleo_h723zg
+  drivers.clock.stm32_clock_configuration.h7rs_core.sysclksrc_pll_hse_96:
+    extra_args: DTC_OVERLAY_FILE="boards/h7rs_clear_clocks.overlay;boards/h7rs_pll_hse_96.overlay"
+    platform_allow:
+      - nucleo_h7s3l8
+    integration_platforms:
+      - nucleo_h7s3l8
+  drivers.clock.stm32_clock_configuration.h7rs_core.sysclksrc_pll_hse_bp_96:
+    extra_args: DTC_OVERLAY_FILE="boards/h7rs_clear_clocks.overlay;boards/h7rs_pll_hse_96.overlay"
+    platform_allow:
+      - stm32h7s78_dk
+    integration_platforms:
+      - stm32h7s78_dk
+  drivers.clock.stm32_clock_configuration.h7rs_core.sysclksrc_pll_hsi_96:
+    extra_args: DTC_OVERLAY_FILE="boards/h7rs_clear_clocks.overlay;boards/h7rs_pll_hsi_96.overlay"
+    platform_allow:
+      - nucleo_h7s3l8
+      - stm32h7s78_dk
+    integration_platforms:
+      - stm32h7s78_dk
+  drivers.clock.stm32_clock_configuration.h7rs_core.sysclksrc_hsi_64:
+    extra_args: DTC_OVERLAY_FILE="boards/h7rs_clear_clocks.overlay;boards/h7rs_hsi_64.overlay"
+    platform_allow:
+      - nucleo_h7s3l8
+      - stm32h7s78_dk
+    integration_platforms:
+      - stm32h7s78_dk
+  drivers.clock.stm32_clock_configuration.h7rs_core.sysclksrc_csi_4:
+    extra_args: DTC_OVERLAY_FILE="boards/h7rs_clear_clocks.overlay;boards/h7rs_csi_4.overlay"
+    platform_allow:
+      - nucleo_h7s3l8
+      - stm32h7s78_dk
+    integration_platforms:
+      - stm32h7s78_dk
+  drivers.clock.stm32_clock_configuration.h7rs_core.sysclksrc_hse_24:
+    extra_args: DTC_OVERLAY_FILE="boards/h7rs_clear_clocks.overlay;boards/h7rs_hse_24.overlay"
+    platform_allow:
+      - nucleo_h7s3l8
+    integration_platforms:
+      - nucleo_h7s3l8
+  drivers.clock.stm32_clock_configuration.h7rs_core.sysclksrc_hse_bp_24:
+    extra_args:
+      DTC_OVERLAY_FILE="boards/h7rs_clear_clocks.overlay;boards/h7rs_hse_bp_24.overlay"
+    platform_allow:
+      - stm32h7s78_dk
+    integration_platforms:
+      - stm32h7s78_dk
+  drivers.clock.stm32_clock_configuration.h7rs_core.sysclksrc_hse_24_css:
+    extra_args:
+      DTC_OVERLAY_FILE="boards/h7rs_clear_clocks.overlay;boards/h7rs_hse_bp_24.overlay;boards/hse_css.overlay"
+    platform_allow:
+      - stm32h7s78_dk
+    integration_platforms:
+      - stm32h7s78_dk
+  drivers.clock.stm32_clock_configuration.h7rs_core.sysclksrc_pll_csi_96:
+    extra_args: DTC_OVERLAY_FILE="boards/h7rs_clear_clocks.overlay;boards/h7rs_pll_csi_96.overlay"
+    platform_allow:
+      - nucleo_h7s3l8
+      - stm32h7s78_dk
+    integration_platforms:
+      - stm32h7s78_dk
+  drivers.clock.stm32_clock_configuration.h7rs_core.sysclksrc_pll_hse_500:
+    extra_args: DTC_OVERLAY_FILE="boards/h7rs_clear_clocks.overlay;boards/h7rs_pll_hse_500.overlay"
+    platform_allow:
+      - nucleo_h7s3l8
+    integration_platforms:
+      - nucleo_h7s3l8
+  drivers.clock.stm32_clock_configuration.h7rs_core.sysclksrc_pll_hse_bp_500:
+    extra_args: DTC_OVERLAY_FILE="boards/h7rs_clear_clocks.overlay;boards/h7rs_pll_hse_bp_500.overlay"
+    platform_allow:
+      - stm32h7s78_dk
+    integration_platforms:
+      - stm32h7s78_dk
