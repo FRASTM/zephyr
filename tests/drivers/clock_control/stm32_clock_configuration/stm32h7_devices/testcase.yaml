@@ -1,18 +1,59 @@
 common:
   timeout: 5
-  platform_allow: nucleo_h723zg
 tests:
   drivers.clock.stm32_clock_configuration.h7_dev.spi1_pllq_1_d1ppre_1:
     extra_args: DTC_OVERLAY_FILE="boards/core_init.overlay;boards/spi1_pllq_1_d1ppre_1.overlay"
+    platform_allow:
+      - nucleo_h723zg
   drivers.clock.stm32_clock_configuration.h7_dev.spi1_pllq_2_d1ppre_4:
     extra_args: DTC_OVERLAY_FILE="boards/core_init.overlay;boards/spi1_pllq_2_d1ppre_4.overlay"
+    platform_allow:
+      - nucleo_h723zg
   drivers.clock.stm32_clock_configuration.h7_dev.spi1_pll2p_1:
     extra_args: DTC_OVERLAY_FILE="boards/core_init.overlay;boards/spi1_pll2p_1.overlay"
+    platform_allow:
+      - nucleo_h723zg
   drivers.clock.stm32_clock_configuration.h7_dev.spi1_pll3p_1_d1ppre_4:
     extra_args: DTC_OVERLAY_FILE="boards/core_init.overlay;boards/spi1_pll3p_1_d1ppre_4.overlay"
+    platform_allow:
+      - nucleo_h723zg
   drivers.clock.stm32_clock_configuration.h7_dev.spi1_per_ck_d1ppre_1:
     extra_args: DTC_OVERLAY_FILE="boards/core_init.overlay;boards/spi1_per_ck_d1ppre_1.overlay"
+    platform_allow:
+      - nucleo_h723zg
   drivers.clock.stm32_clock_configuration.h7_dev.spi1_per_ck_hsi:
     extra_args: DTC_OVERLAY_FILE="boards/core_init.overlay;boards/spi1_per_ck_hsi.overlay"
+    platform_allow:
+      - nucleo_h723zg
   drivers.clock.stm32_clock_configuration.h7_dev.spi1_per_ck_hse:
     extra_args: DTC_OVERLAY_FILE="boards/core_init.overlay;boards/spi1_per_ck_hse.overlay"
+    platform_allow:
+      - nucleo_h723zg
+  drivers.clock.stm32_clock_configuration.h7rs_dev.spi1_pllq_1_ppre1_1:
+    extra_args: DTC_OVERLAY_FILE="boards/h7rs_core_init.overlay;boards/h7rs_spi1_pllq_1_ppre1_1.overlay"
+    platform_allow:
+      - stm32h7s78_dk
+  drivers.clock.stm32_clock_configuration.h7rs_dev.spi1_pllq_2_ppre1_4:
+    extra_args: DTC_OVERLAY_FILE="boards/h7rs_core_init.overlay;boards/h7rs_spi1_pllq_2_ppre1_4.overlay"
+    platform_allow:
+      - stm32h7s78_dk
+  drivers.clock.stm32_clock_configuration.h7rs_dev.spi1_pll2p_1:
+    extra_args: DTC_OVERLAY_FILE="boards/h7rs_core_init.overlay;boards/h7rs_spi1_pll2p_1.overlay"
+    platform_allow:
+      - stm32h7s78_dk
+  drivers.clock.stm32_clock_configuration.h7rs_dev.spi1_pll3p_1_ppre1_4:
+    extra_args: DTC_OVERLAY_FILE="boards/h7rs_core_init.overlay;boards/h7rs_spi1_pll3p_1_ppre1_4.overlay"
+    platform_allow:
+      - stm32h7s78_dk
+  drivers.clock.stm32_clock_configuration.h7rs_dev.spi1_per_ck_d1ppre_1:
+    extra_args: DTC_OVERLAY_FILE="boards/h7rs_core_init.overlay;boards/h7rs_spi1_per_ck_ppre1_1.overlay"
+    platform_allow:
+      - stm32h7s78_dk
+  drivers.clock.stm32_clock_configuration.h7rs_dev.spi1_per_ck_hsi:
+    extra_args: DTC_OVERLAY_FILE="boards/h7rs_core_init.overlay;boards/h7rs_spi1_per_ck_hsi.overlay"
+    platform_allow:
+      - stm32h7s78_dk
+  drivers.clock.stm32_clock_configuration.h7rs_dev.spi1_per_ck_hse:
+    extra_args: DTC_OVERLAY_FILE="boards/h7rs_core_init.overlay;boards/h7rs_spi1_per_ck_hse.overlay"
+    platform_allow:
+      - stm32h7s78_dk

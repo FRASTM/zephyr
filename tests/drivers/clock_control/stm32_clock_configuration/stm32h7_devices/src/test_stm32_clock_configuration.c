@@ -33,6 +33,17 @@ ZTEST(stm32h7_devices_clocks, test_sysclk_freq)
 			CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC, soc_sys_clk_freq);
 }
 
+#if defined(CONFIG_SOC_SERIES_STM32H7RSX)
+#define STM32_RCC_SPI1_CLOCK_SOURCE_PLL RCC_SPI1CLKSOURCE_PLL1Q
+#define STM32_RCC_SPI1_CLOCK_SOURCE_PLL2 RCC_SPI1CLKSOURCE_PLL2P
+#define STM32_RCC_SPI1_CLOCK_SOURCE_PLL3 RCC_SPI1CLKSOURCE_PLL3P
+#define STM32_RCC_SPI1_CLOCK_SOURCE_CLKP RCC_SPI1CLKSOURCE_CLKP
+#else
+#define STM32_RCC_SPI1_CLOCK_SOURCE_PLL RCC_SPI123CLKSOURCE_PLL
+#define STM32_RCC_SPI1_CLOCK_SOURCE_PLL2 RCC_SPI123CLKSOURCE_PLL2
+#define STM32_RCC_SPI1_CLOCK_SOURCE_PLL3 RCC_SPI123CLKSOURCE_PLL3
+#define STM32_RCC_SPI1_CLOCK_SOURCE_CLKP RCC_SPI123CLKSOURCE_CLKP
+#endif /* CONFIG_SOC_SERIES_STM32H7RSX */
 ZTEST(stm32h7_devices_clocks, test_spi_clk_config)
 {
 	static const struct stm32_pclken pclken[] = STM32_DT_CLOCKS(DT_NODELABEL(spi1));
@@ -62,22 +73,23 @@ ZTEST(stm32h7_devices_clocks, test_spi_clk_config)
 
 		spi1_actual_domain_clk = __HAL_RCC_GET_SPI1_SOURCE();
 
+
 		if (pclken[1].bus == STM32_SRC_PLL1_Q) {
-			zassert_equal(spi1_actual_domain_clk, RCC_SPI123CLKSOURCE_PLL,
+			zassert_equal(spi1_actual_domain_clk, STM32_RCC_SPI1_CLOCK_SOURCE_PLL,
 					"Expected SPI src: PLL1 Q (0x%x). Actual: 0x%x",
-					RCC_SPI123CLKSOURCE_PLL, spi1_actual_domain_clk);
+					STM32_RCC_SPI1_CLOCK_SOURCE_PLL, spi1_actual_domain_clk);
 		} else if (pclken[1].bus == STM32_SRC_PLL2_P) {
-			zassert_equal(spi1_actual_domain_clk, RCC_SPI123CLKSOURCE_PLL2,
+			zassert_equal(spi1_actual_domain_clk, STM32_RCC_SPI1_CLOCK_SOURCE_PLL2,
 					"Expected SPI src: PLL2 P (0x%x). Actual: 0x%x",
-					RCC_SPI123CLKSOURCE_PLL2, spi1_actual_domain_clk);
+					STM32_RCC_SPI1_CLOCK_SOURCE_PLL2, spi1_actual_domain_clk);
 		} else if (pclken[1].bus == STM32_SRC_PLL3_P) {
-			zassert_equal(spi1_actual_domain_clk, RCC_SPI123CLKSOURCE_PLL3,
+			zassert_equal(spi1_actual_domain_clk, STM32_RCC_SPI1_CLOCK_SOURCE_PLL3,
 					"Expected SPI src: PLL3 P (0x%x). Actual: 0x%x",
-					RCC_SPI123CLKSOURCE_PLL3, spi1_actual_domain_clk);
+					STM32_RCC_SPI1_CLOCK_SOURCE_PLL3, spi1_actual_domain_clk);
 		} else if (pclken[1].bus == STM32_SRC_CKPER) {
-			zassert_equal(spi1_actual_domain_clk, RCC_SPI123CLKSOURCE_CLKP,
+			zassert_equal(spi1_actual_domain_clk, STM32_RCC_SPI1_CLOCK_SOURCE_CLKP,
 					"Expected SPI src: PERCLK (0x%x). Actual: 0x%x",
-					RCC_SPI123CLKSOURCE_CLKP, spi1_actual_domain_clk);
+					STM32_RCC_SPI1_CLOCK_SOURCE_CLKP, spi1_actual_domain_clk);
 
 			/* Check perclk configuration */
 #if DT_NODE_HAS_STATUS_OKAY(DT_NODELABEL(perck))
@@ -116,7 +128,7 @@ ZTEST(stm32h7_devices_clocks, test_spi_clk_config)
 
 		spi1_actual_clk_freq = HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_SPI1);
 		zassert_equal(spi1_dt_clk_freq, spi1_actual_clk_freq,
-				"Expected SPI clk: 0x%x. Actual SPI clk: 0x%x",
+				"Expected SPI domain clk: 0x%x. Actual SPI clk: 0x%x",
 				spi1_dt_clk_freq, spi1_actual_clk_freq);
 	} else {
 		/* No domain clock available, get rate from reg_clk */

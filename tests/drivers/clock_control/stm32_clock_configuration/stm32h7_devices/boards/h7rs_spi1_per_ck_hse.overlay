@@ -1,0 +1,28 @@
+/*
+ * Copyright (c) 2025 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * Warning: This overlay performs configuration from clean sheet.
+ * It is assumed that it is applied after h7rs_core_init.overlay file.
+ */
+
+&clk_hse {
+	clock-frequency = <DT_FREQ_M(24)>;
+	hse-bypass;
+	status = "okay";
+};
+
+&perck {
+	clocks = <&rcc STM32_SRC_HSE CKPER_SEL(2)>;
+	status = "okay";
+};
+
+&spi1 {
+	/delete-property/ clocks;
+	clocks = <&rcc STM32_CLOCK_BUS_APB2 0x00001000>,
+		 <&rcc STM32_SRC_CKPER SPI1_SEL(4)>;
+	status = "okay";
+};

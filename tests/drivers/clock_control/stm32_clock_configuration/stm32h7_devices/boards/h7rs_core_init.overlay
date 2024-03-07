@@ -1,0 +1,122 @@
+/*
+ * Copyright (c) 2025 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * Warning: This overlay clears clocks back to a state equivalent to what could
+ * be found in stm32h7rs.dtsi
+ */
+
+
+/* Clocks clean up config
+ * Aim is to avoid conflict with specific default board configuration
+ */
+
+&clk_hse {
+	status = "disabled";
+	/delete-property/ hse-bypass;
+	/delete-property/ clock-frequency;
+};
+
+&clk_hsi {
+	status = "disabled";
+	/delete-property/ hsi-div;
+};
+
+&clk_csi {
+	status = "disabled";
+};
+
+&clk_lse {
+	status = "disabled";
+};
+
+&clk_lsi {
+	status = "disabled";
+};
+
+&pll {
+	/delete-property/ div-m;
+	/delete-property/ mul-n;
+	/delete-property/ div-p;
+	/delete-property/ div-q;
+	/delete-property/ div-r;
+	/delete-property/ div-s;
+	/delete-property/ clocks;
+	status = "disabled";
+};
+
+&pll2 {
+	/delete-property/ div-m;
+	/delete-property/ mul-n;
+	/delete-property/ div-p;
+	/delete-property/ div-q;
+	/delete-property/ div-r;
+	/delete-property/ div-s;
+	/delete-property/ div-t;
+	/delete-property/ clocks;
+	status = "disabled";
+};
+
+&pll3 {
+	/delete-property/ div-m;
+	/delete-property/ mul-n;
+	/delete-property/ div-p;
+	/delete-property/ div-q;
+	/delete-property/ div-r;
+	/delete-property/ div-s;
+	/delete-property/ clocks;
+	status = "disabled";
+};
+
+&rcc {
+	/delete-property/ clocks;
+	/delete-property/ clock-frequency;
+	/delete-property/ dcpre;
+	/delete-property/ hpre;
+	/delete-property/ dppre1;
+	/delete-property/ dppre2;
+	/delete-property/ dppre4;
+	/delete-property/ dppre5;
+};
+
+&spi1 {
+	pinctrl-0 = <&spi1_sck_pa5 &spi1_miso_pa6 &spi1_mosi_pb5>;
+	pinctrl-names = "default";
+	status = "disabled";
+};
+
+/* Core set up
+ * Aim of this part is to provide a base working clock config
+ */
+
+&clk_hse {
+	hse-bypass;
+	clock-frequency = <DT_FREQ_M(24)>;
+	status = "okay";
+};
+
+&pll {
+	div-m = <2>;
+	mul-n = <48>;
+	div-p = <6>;
+	div-q = <6>;
+	div-r = <6>;
+	div-s = <6>;
+	div-t = <6>;
+	clocks = <&clk_hse>;
+	status = "okay";
+};
+
+&rcc {
+	clocks = <&pll>;
+	clock-frequency = <DT_FREQ_M(96)>;
+	dcpre = <1>;
+	hpre = <1>;
+	ppre1 = <1>;
+	ppre2 = <1>;
+	ppre4 = <1>;
+	ppre5 = <1>;
+};

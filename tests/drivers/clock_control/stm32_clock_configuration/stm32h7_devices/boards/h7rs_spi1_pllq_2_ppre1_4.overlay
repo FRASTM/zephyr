@@ -1,0 +1,32 @@
+/*
+ * Copyright (c) 2025 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * Warning: This overlay performs configuration from clean sheet.
+ * It is assumed that it is applied after h7rs_core_init.overlay file.
+ */
+
+/* With this particular div-q and ppre1 values
+ * APB2 and PLL_Q clock frequencies are equal to 24MHz
+ * This setting is default stm32h7rs SPI devices configuration.
+ * This test config ensures it still works.
+ */
+
+&pll {
+	/delete-property/ div-q;
+	div-q = <24>;
+};
+
+&rcc {
+	/delete-property/ ppre2;
+	ppre2 = <4>;
+};
+
+&spi1 {
+	/delete-property/ clocks;
+	clocks = <&rcc STM32_CLOCK_BUS_APB2 0x00001000>;
+	status = "okay";
+};
