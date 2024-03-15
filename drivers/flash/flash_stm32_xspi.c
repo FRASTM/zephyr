@@ -54,6 +54,10 @@ LOG_MODULE_REGISTER(flash_stm32_xspi, CONFIG_FLASH_LOG_LEVEL);
 #include <zephyr/drivers/dma.h>
 #include <stm32_ll_dma.h>
 #endif /* STM32_XSPI_USE_DMA */
+#if defined(CONFIG_SOC_SERIES_STM32H7RSX)
+#include <stm32_ll_pwr.h>
+#include <stm32_ll_system.h>
+#endif /* CONFIG_SOC_SERIES_STM32H7RSX */
 
 #define STM32_XSPI_FIFO_THRESHOLD         4
 
@@ -289,7 +293,9 @@ static XSPI_RegularCmdTypeDef xspi_prepare_cmd(uint8_t transfer_mode, uint8_t tr
 		.DQSMode = (transfer_rate == XSPI_DTR_TRANSFER)
 				? HAL_XSPI_DQS_ENABLE
 				: HAL_XSPI_DQS_DISABLE,
+#ifdef XSPI_CCR_SIOO
 		.SIOOMode = HAL_XSPI_SIOO_INST_EVERY_CMD,
+#endif /* XSPI_CCR_SIOO */
 	};
 
 	switch (transfer_mode) {
@@ -784,12 +790,9 @@ static int stm32_xspi_config_mem(const struct device *dev)
 		return 0;
 	}
 
-	/* Going to set the XPI mode (STR or DTR transfer rate) */
-	LOG_DBG("XSPI configuring Octo SPI mode");
-
 	if (stm32_xspi_write_enable(dev_data,
 		XSPI_SPI_MODE, XSPI_STR_TRANSFER) != 0) {
-		LOG_ERR("OSPI write Enable failed");
+		LOG_ERR("XSPI write Enable failed");
 		return -EIO;
 	}
 
@@ -887,7 +890,9 @@ static int stm32_xspi_mem_reset(const struct device *dev)
 		.DataLength = HAL_XSPI_DATA_NONE,
 		.DummyCycles = 0U,
 		.DQSMode = HAL_XSPI_DQS_DISABLE,
+#ifdef XSPI_CCR_SIOO
 		.SIOOMode = HAL_XSPI_SIOO_INST_EVERY_CMD,
+#endif /* XSPI_CCR_SIOO */
 	};
 
 	/* Reset enable in SPI mode and STR transfer mode */
@@ -988,7 +993,9 @@ static int flash_stm32_xspi_erase(const struct device *dev, off_t addr,
 		.DataMode = HAL_XSPI_DATA_NONE,
 		.DummyCycles = 0U,
 		.DQSMode = HAL_XSPI_DQS_DISABLE,
+#ifdef XSPI_CCR_SIOO
 		.SIOOMode = HAL_XSPI_SIOO_INST_EVERY_CMD,
+#endif /* XSPI_CCR_SIOO */
 	};
 
 	xspi_lock_thread(dev);
@@ -1336,7 +1343,6 @@ static void flash_stm32_xspi_isr(const struct device *dev)
 	HAL_XSPI_IRQHandler(&dev_data->hxspi);
 }
 
-#if !defined(CONFIG_SOC_SERIES_STM32H7X)
 /* weak function required for HAL compilation */
 __weak HAL_StatusTypeDef HAL_DMA_Abort_IT(DMA_HandleTypeDef *hdma)
 {
@@ -1348,7 +1354,6 @@ __weak HAL_StatusTypeDef HAL_DMA_Abort(DMA_HandleTypeDef *hdma)
 {
 	return HAL_OK;
 }
-#endif /* !CONFIG_SOC_SERIES_STM32H7X */
 
 /* This function is executed in the interrupt context */
 #if STM32_XSPI_USE_DMA
@@ -1869,6 +1874,12 @@ static int flash_stm32_xspi_init(const struct device *dev)
 		LOG_ERR("XSPI mode SPI|DUAL|QUAD/DTR is not valid");
 		return -ENOTSUP;
 	}
+#if defined(CONFIG_SOC_SERIES_STM32H7RSX)
+
+	LL_PWR_EnableXSPIM2();
+	__HAL_RCC_SBS_CLK_ENABLE();
+	LL_SBS_EnableXSPI2SpeedOptim();
+#endif /* CONFIG_SOC_SERIES_STM32H7RSX */
 
 	/* Signals configuration */
 	ret = pinctrl_apply_state(dev_cfg->pcfg, PINCTRL_STATE_DEFAULT);
@@ -2030,7 +2041,7 @@ static int flash_stm32_xspi_init(const struct device *dev)
 	dev_data->hxspi.Init.MemorySize = find_lsb_set(dev_cfg->flash_size) - 1;
 #endif /* CONFIG_SOC_SERIES_STM32U5X */
 	dev_data->hxspi.Init.MemoryMode = HAL_XSPI_SINGLE_MEM;
-	dev_data->hxspi.Init.ChipSelectHighTimeCycle = 2;
+	dev_data->hxspi.Init.ChipSelectHighTimeCycle = 1;
 	dev_data->hxspi.Init.FreeRunningClock = HAL_XSPI_FREERUNCLK_DISABLE;
 	dev_data->hxspi.Init.ClockMode = HAL_XSPI_CLOCK_MODE_0;
 #if defined(OCTOSPI_DCR2_WRAPSIZE)
@@ -2044,16 +2055,18 @@ static int flash_stm32_xspi_init(const struct device *dev)
 		dev_data->hxspi.Init.MemoryType = HAL_XSPI_MEMTYPE_MICRON;
 		dev_data->hxspi.Init.DelayHoldQuarterCycle = HAL_XSPI_DHQC_DISABLE;
 	}
-	dev_data->hxspi.Init.ChipSelectBoundary = 0;
+	dev_data->hxspi.Init.ChipSelectBoundary = HAL_XSPI_BONDARYOF_NONE;
 #if STM32_XSPI_DLYB_BYPASSED
 	dev_data->hxspi.Init.DelayBlockBypass = HAL_XSPI_DELAY_BLOCK_BYPASS;
-#else
-	dev_data->hxspi.Init.DelayBlockBypass = HAL_XSPI_DELAY_BLOCK_ON;
 #endif /* STM32_XSPI_DLYB_BYPASSED */
 #if defined(OCTOSPI_DCR4_REFRESH)
 	dev_data->hxspi.Init.Refresh = 0;
 #endif /* OCTOSPI_DCR4_REFRESH */
+#if defined(CONFIG_SOC_SERIES_STM32H7RSX)
 
+	dev_data->hxspi.Init.MaxTran = 0;
+	dev_data->hxspi.Init.MemorySelect = HAL_XSPI_CSSEL_NCS1;
+#endif /* CONFIG_SOC_SERIES_STM32H7RSX */
 	if (HAL_XSPI_Init(&dev_data->hxspi) != HAL_OK) {
 		LOG_ERR("XSPI Init failed");
 		return -EIO;
@@ -2061,34 +2074,29 @@ static int flash_stm32_xspi_init(const struct device *dev)
 
 	LOG_DBG("XSPI Init'd");
 
-#if defined(OCTOSPIM)
+#if defined(XSPIM) || defined(XSPIM1)|| defined(XSPIM2)
 	/* XSPI I/O manager init Function */
 	XSPIM_CfgTypeDef xspi_mgr_cfg;
 
+	__HAL_RCC_XSPIM_CLK_ENABLE();
+
 	if (dev_data->hxspi.Instance == XSPI1) {
 		xspi_mgr_cfg.IOPort = HAL_XSPIM_IOPORT_1;
+		/* TODO: check the value for nCSOverride */
 		xspi_mgr_cfg.nCSOverride = HAL_XSPI_CSSEL_OVR_NCS1;
 	} else if (dev_data->hxspi.Instance == XSPI2) {
-		ospi_mgr_cfg.IOPort = HAL_XSPIM_IOPORT_2;
-		ospi_mgr_cfg.nCSOverride = HAL_XSPI_CSSEL_OVR_NCS2;
+		xspi_mgr_cfg.IOPort = HAL_XSPIM_IOPORT_2;
+		xspi_mgr_cfg.nCSOverride = HAL_XSPI_CSSEL_OVR_NCS1;
 	}
-	ospi_mgr_cfg.Req2AckTime = 1;
+//	xspi_mgr_cfg.Req2AckTime = 1;
 
 	if (HAL_XSPIM_Config(&dev_data->hxspi, &xspi_mgr_cfg,
 		HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
 		LOG_ERR("XSPI M config failed");
 		return -EIO;
 	}
-#if defined(CONFIG_SOC_SERIES_STM32H7X)
 
-	LL_DLYB_CfgTypeDef xspi_delay_block_cfg;
-
-	xspi_delay_block_cfg.Units = 56;
-	xspi_delay_block_cfg.PhaseSel = 2;
-
-	LL_DLYB_SetDelay(&dev_data->hxspi, &xspi_delay_block_cfg);
-	LOG_DBG("XSPI DelayBlock config'd");
-#endif /* CONFIG_SOC_SERIES_STM32H7X */
+	LOG_DBG("XSPI IO Mgr Init'd");
 
 #endif /* XSPIM */
 
@@ -2143,12 +2151,17 @@ static int flash_stm32_xspi_init(const struct device *dev)
 #endif /* CONFIG_FLASH_JESD216_API */
 
 	if (stm32_xspi_config_mem(dev) != 0) {
-		LOG_ERR("OSPI mode not config'd (%u rate %u)",
+		LOG_ERR("XSPI mode not config'd (%u rate %u)",
 			dev_cfg->data_mode, dev_cfg->data_rate);
 		return -EIO;
+		}
 	}
 
+	LOG_DBG("XSPI configured ");
 
+	LOG_INF("NOR external-flash at 0x%lx (0x%x bytes)",
+		(long)(STM32_XSPI_BASE_ADDRESS),
+		dev_cfg->flash_size);
 
 	/* Send the instruction to read the SFDP  */
 	const uint8_t decl_nph = 2;
@@ -2249,9 +2262,6 @@ static int flash_stm32_xspi_init(const struct device *dev)
 	}
 #endif /* CONFIG_FLASH_PAGE_LAYOUT */
 
-	LOG_INF("NOR external-flash at 0x%lx (0x%x bytes)",
-		(long)(STM32_XSPI_BASE_ADDRESS),
-		dev_cfg->flash_size);
 
 	return 0;
 }
