@@ -916,12 +916,150 @@ static int stm32_xspi_mem_reset(const struct device *dev)
 
 	return 0;
 }
+#ifdef CONFIG_STM32_MEMMAP
+/* Function to configure the octoflash in MemoryMapped mode */
+static int stm32_xspi_set_memorymap(const struct device *dev)
+{
+	HAL_StatusTypeDef ret;
+	const struct flash_stm32_xspi_config *dev_cfg = dev->config;
+	struct flash_stm32_xspi_data *dev_data = dev->data;
+	XSPI_RegularCmdTypeDef s_command;
+	XSPI_MemoryMappedTypeDef s_MemMappedCfg = {0};
+
+	/* Configure octoflash in MemoryMapped mode */
+	if ((dev_cfg->data_mode == XSPI_SPI_MODE) &&
+		(stm32_xspi_hal_address_size(dev) == HAL_XSPI_ADDRESS_24_BITS)) {
+		/* OPI mode and 3-bytes address size not supported by memory */
+		LOG_ERR("XSPI_SPI_MODE in 3Bytes addressing is not supported");
+		return -EIO;
+	}
+
+	/* Initialize the read command */
+	s_command.OperationType = HAL_XSPI_OPTYPE_READ_CFG;
+	s_command.InstructionMode = (dev_cfg->data_rate == XSPI_STR_TRANSFER)
+				? ((dev_cfg->data_mode == XSPI_SPI_MODE)
+					? HAL_XSPI_INSTRUCTION_1_LINE
+					: HAL_XSPI_INSTRUCTION_8_LINES)
+				: HAL_XSPI_INSTRUCTION_8_LINES;
+	s_command.InstructionDTRMode = (dev_cfg->data_rate == XSPI_STR_TRANSFER)
+				? HAL_XSPI_INSTRUCTION_DTR_DISABLE
+				: HAL_XSPI_INSTRUCTION_DTR_ENABLE;
+	s_command.InstructionWidth = (dev_cfg->data_rate == XSPI_STR_TRANSFER)
+				? ((dev_cfg->data_mode == XSPI_SPI_MODE)
+					? HAL_XSPI_INSTRUCTION_8_BITS
+					: HAL_XSPI_INSTRUCTION_16_BITS)
+				: HAL_XSPI_INSTRUCTION_16_BITS;
+	s_command.Instruction = (dev_cfg->data_rate == XSPI_STR_TRANSFER)
+				? ((dev_cfg->data_mode == XSPI_SPI_MODE)
+					? ((stm32_xspi_hal_address_size(dev) ==
+					HAL_XSPI_ADDRESS_24_BITS)
+						? SPI_NOR_CMD_READ_FAST
+						: SPI_NOR_CMD_READ_FAST_4B)
+					: dev_data->read_opcode)
+				: SPI_NOR_OCMD_DTR_RD;
+	s_command.AddressMode = (dev_cfg->data_rate == XSPI_STR_TRANSFER)
+				? ((dev_cfg->data_mode == XSPI_SPI_MODE)
+					? HAL_XSPI_ADDRESS_1_LINE
+					: HAL_XSPI_ADDRESS_8_LINES)
+				: HAL_XSPI_ADDRESS_8_LINES;
+	s_command.AddressDTRMode = (dev_cfg->data_rate == XSPI_STR_TRANSFER)
+				? HAL_XSPI_ADDRESS_DTR_DISABLE
+				: HAL_XSPI_ADDRESS_DTR_ENABLE;
+	s_command.AddressWidth = (dev_cfg->data_rate == XSPI_STR_TRANSFER)
+				? stm32_xspi_hal_address_size(dev)
+				: HAL_XSPI_ADDRESS_32_BITS;
+	s_command.AlternateBytesMode = HAL_XSPI_ALT_BYTES_NONE;
+	s_command.DataMode = (dev_cfg->data_rate == XSPI_STR_TRANSFER)
+				? ((dev_cfg->data_mode == XSPI_SPI_MODE)
+					? HAL_XSPI_DATA_1_LINE
+					: HAL_XSPI_DATA_8_LINES)
+				: HAL_XSPI_DATA_8_LINES;
+	s_command.DataDTRMode = (dev_cfg->data_rate == XSPI_STR_TRANSFER)
+				? HAL_XSPI_DATA_DTR_DISABLE
+				: HAL_XSPI_DATA_DTR_ENABLE;
+	s_command.DummyCycles = (dev_cfg->data_rate == XSPI_STR_TRANSFER)
+				? ((dev_cfg->data_mode == XSPI_SPI_MODE)
+					? SPI_NOR_DUMMY_RD
+					: SPI_NOR_DUMMY_RD_OCTAL)
+				: SPI_NOR_DUMMY_RD_OCTAL_DTR;
+	s_command.DQSMode = (dev_cfg->data_rate == XSPI_STR_TRANSFER)
+				? HAL_XSPI_DQS_DISABLE
+				: HAL_XSPI_DQS_ENABLE;
+#ifdef XSPI_CCR_SIOO
+	s_command.SIOOMode = HAL_XSPI_SIOO_INST_EVERY_CMD;
+#endif /* XSPI_CCR_SIOO */
+
+	ret = HAL_XSPI_Command(&dev_data->hxspi, &s_command, HAL_XSPI_TIMEOUT_DEFAULT_VALUE);
+	if (ret != HAL_OK) {
+		LOG_ERR("%d: Failed to set memory map", ret);
+		return -EIO;
+	}
+
+	/* Initialize the program command */
+	s_command.OperationType = HAL_XSPI_OPTYPE_WRITE_CFG;
+	if (dev_cfg->data_rate == XSPI_STR_TRANSFER) {
+		s_command.Instruction = (dev_cfg->data_mode == XSPI_SPI_MODE)
+					? ((stm32_xspi_hal_address_size(dev) ==
+					HAL_XSPI_ADDRESS_24_BITS)
+						? SPI_NOR_CMD_PP
+						: SPI_NOR_CMD_PP_4B)
+					: SPI_NOR_OCMD_PAGE_PRG;
+	} else {
+		s_command.Instruction = SPI_NOR_OCMD_PAGE_PRG;
+	}
+	s_command.DQSMode = HAL_XSPI_DQS_DISABLE;
+	s_command.DummyCycles = 0U;
+
+	ret = HAL_XSPI_Command(&dev_data->hxspi, &s_command, HAL_XSPI_TIMEOUT_DEFAULT_VALUE);
+	if (ret != HAL_OK) {
+		LOG_ERR("%d: Failed to set memory mapped", ret);
+		return -EIO;
+	}
+
+	/* Enable the memory-mapping */
+	s_MemMappedCfg.TimeOutActivation = HAL_XSPI_TIMEOUT_COUNTER_DISABLE;
+
+	ret = HAL_XSPI_MemoryMapped(&dev_data->hxspi, &s_MemMappedCfg);
+	if (ret != HAL_OK) {
+		LOG_ERR("%d: Failed to enable memory mapped", ret);
+		return -EIO;
+	}
+
+	LOG_DBG("MemoryMap mode enabled");
+	return 0;
+}
+
+/* Function to return true if the octoflash is in MemoryMapped else false */
+static bool stm32_xspi_is_memorymap(const struct device *dev)
+{
+	struct flash_stm32_xspi_data *dev_data = dev->data;
+
+	return ((READ_BIT(dev_data->hxspi.Instance->CR,
+			  XSPI_CR_FMODE) == XSPI_CR_FMODE) ?
+			  true : false);
+}
+
+/* Abort the Memorymapped Mode so that erasing is possible */
+static int stm32_xspi_abort_memmap(const struct device *dev)
+{
+	struct flash_stm32_xspi_data *dev_data = dev->data;
+
+	if (HAL_XSPI_Abort(&dev_data->hxspi) != HAL_OK) {
+		LOG_ERR("MemoryMap abort failed");
+		return -EIO;
+	}
+	LOG_DBG("MemoryMap mode disabled");
+
+	return 0;
+}
+#endif /* CONFIG_STM32_MEMMAP */
 
 /*
  * Function to erase the flash : chip or sector with possible OCTO/SPI and STR/DTR
  * to erase the complete chip (using dedicated command) :
  *   set size >= flash size
  *   set addr = 0
+ * NOTE: cannot erase in MemoryMapped mode
  */
 static int flash_stm32_xspi_erase(const struct device *dev, off_t addr,
 				  size_t size)
@@ -950,6 +1088,13 @@ static int flash_stm32_xspi_erase(const struct device *dev, off_t addr,
 		LOG_ERR("Error: wrong sector size 0x%x", size);
 		return -ENOTSUP;
 	}
+
+#ifdef CONFIG_STM32_MEMMAP
+	if (stm32_xspi_is_memorymap(dev)) {
+		LOG_DBG("MemoryMap : cannot erase");
+		return 0;
+	}
+#endif /* CONFIG_STM32_MEMMAP */
 
 	XSPI_RegularCmdTypeDef cmd_erase = {
 		.OperationType = HAL_XSPI_OPTYPE_COMMON_CFG,
@@ -1100,6 +1245,16 @@ static int flash_stm32_xspi_read(const struct device *dev, off_t addr,
 	if (size == 0) {
 		return 0;
 	}
+#ifdef CONFIG_STM32_MEMMAP
+	if (stm32_xspi_is_memorymap(dev)) {
+		LOG_DBG("MemoryMapped Read offset: 0x%lx, len: %zu",
+			(long)(dev_cfg->flash_base_address + addr),
+			size);
+		memcpy(data, (uint8_t *)dev_cfg->flash_base_address + addr, size);
+
+		return 0;
+	}
+#endif /* CONFIG_STM32_MEMMAP */
 
 	XSPI_RegularCmdTypeDef cmd = xspi_prepare_cmd(dev_cfg->data_mode, dev_cfg->data_rate);
 
@@ -1169,7 +1324,10 @@ static int flash_stm32_xspi_read(const struct device *dev, off_t addr,
 	return ret;
 }
 
-/* Function to write the flash (page program) : with possible OCTO/SPI and STR/DTR */
+/*
+ * Function to write the flash (page program) : with possible OSPI/SPI and STR/DTR
+ * NOTE: writing  in MemoryMapped mode is not guaranted
+*/
 static int flash_stm32_xspi_write(const struct device *dev, off_t addr,
 				  const void *data, size_t size)
 {
@@ -1188,6 +1346,16 @@ static int flash_stm32_xspi_write(const struct device *dev, off_t addr,
 	if (size == 0) {
 		return 0;
 	}
+#ifdef CONFIG_STM32_MEMMAP
+	if (stm32_xspi_is_memorymap(dev)) {
+		LOG_DBG("MemoryMapped Write offset: 0x%lx, len: %zu",
+			(long)(dev_cfg->flash_base_address + addr),
+			size);
+		memcpy((uint8_t *)dev_cfg->flash_base_address + addr, data, size);
+
+		return 0;
+	}
+#endif /* CONFIG_STM32_MEMMAP */
 
 	/* page program for STR or DTR mode */
 	XSPI_RegularCmdTypeDef cmd_pp = xspi_prepare_cmd(dev_cfg->data_mode, dev_cfg->data_rate);
@@ -1860,6 +2028,16 @@ static int flash_stm32_xspi_init(const struct device *dev)
 		return -ENODEV;
 	}
 
+#ifdef CONFIG_STM32_MEMMAP
+	/* If MemoryMapped then configure skip init */
+	if (stm32_xspi_is_memorymap(dev)) {
+		LOG_DBG("NOR init'd in MemMapped mode\n");
+		/* Force HAL instance in correct state */
+		dev_data->hxspi.State = HAL_XSPI_STATE_BUSY_MEM_MAPPED;
+		return 0;
+	}
+#endif /* CONFIG_STM32_MEMMAP */
+
 #if STM32_XSPI_USE_DMA
 	/*
 	 * DMA configuration
@@ -2065,6 +2243,38 @@ static int flash_stm32_xspi_init(const struct device *dev)
 
 	LOG_DBG("Reset Mem (SPI/STR)");
 
+#if defined(CONFIG_SOC_SERIES_STM32H7RSX) && defined(CONFIG_STM32_MEMMAP)
+	if ((dev_cfg->data_mode == XSPI_OCTO_MODE)
+		&& (dev_cfg->data_rate == XSPI_DTR_TRANSFER)) {
+		/* Going to set directly the OCTO mode (DTR transfer rate) */
+		LOG_DBG("XSPI configuring Octo SPI & DTR mode");
+
+		if (stm32_xspi_octoDTR_enable(dev_data,
+			XSPI_OCTO_MODE, XSPI_DTR_TRANSFER) != 0) {
+			LOG_ERR("XSPI config Octo SPI & DTR failed");
+			return -EIO;
+		}
+	} else {
+		if (stm32_xspi_config_mem(dev) != 0) {
+			LOG_ERR("XSPI mode not config'd (%u rate %u)",
+				dev_cfg->data_mode, dev_cfg->data_rate);
+			return -EIO;
+		}
+	}
+
+	/* Now configure the octo Flash in MemoryMapped (access by address) */
+	ret = stm32_xspi_set_memorymap(dev);
+	if (ret != 0) {
+		LOG_ERR("Error (%d): setting NOR in MemoryMapped mode", ret);
+		return -EINVAL;
+	}
+	LOG_DBG("NOR in MemoryMapped mode at 0x%lx (0x%x bytes)",
+		(long)(dev_cfg->flash_base_address),
+		dev_cfg->flash_size);
+
+	return 0;
+#endif /* CONFIG_SOC_SERIES_STM32H7RSX */
+
 	/* Check if memory is ready in the SPI/STR mode */
 	if (stm32_xspi_mem_ready(dev,
 		XSPI_SPI_MODE, XSPI_STR_TRANSFER) != 0) {
@@ -2083,31 +2293,12 @@ static int flash_stm32_xspi_init(const struct device *dev)
 	}
 #endif /* CONFIG_FLASH_JESD216_API */
 
-#if defined(CONFIG_SOC_SERIES_STM32H7RSX)
-	if ((dev_cfg->data_mode == XSPI_OCTO_MODE)
-		&& (dev_cfg->data_rate == XSPI_DTR_TRANSFER)) {
-		/* Going to set directly the OCTO mode (DTR transfer rate) */
-		LOG_DBG("XSPI configuring Octo SPI & DTR mode");
-
-		if (stm32_xspi_octoDTR_enable(dev_data,
-			XSPI_OCTO_MODE, XSPI_DTR_TRANSFER) != 0) {
-			LOG_ERR("XSPI config Octo SPI & DTR failed");
-			return -EIO;
-		}
-	} else {
-		if (stm32_xspi_config_mem(dev) != 0) {
-			LOG_ERR("XSPI mode not config'd (%u rate %u)",
-				dev_cfg->data_mode, dev_cfg->data_rate);
-			return -EIO;
-		}
-	}
-#else
 	if (stm32_xspi_config_mem(dev) != 0) {
 		LOG_ERR("XSPI mode not config'd (%u rate %u)",
 			dev_cfg->data_mode, dev_cfg->data_rate);
 		return -EIO;
 	}
-#endif /* CONFIG_SOC_SERIES_STM32H7RSX */
+
 	/* Send the instruction to read the SFDP  */
 	const uint8_t decl_nph = 2;
 	union {
@@ -2207,9 +2398,23 @@ static int flash_stm32_xspi_init(const struct device *dev)
 	}
 #endif /* CONFIG_FLASH_PAGE_LAYOUT */
 
+#ifdef CONFIG_STM32_MEMMAP
+	/* Now configure the octo Flash in MemoryMapped (access by address) */
+	ret = stm32_xspi_set_memorymap(dev);
+	if (ret != 0) {
+		LOG_ERR("Error (%d): setting NOR in MemoryMapped mode", ret);
+		return -EINVAL;
+	}
+	LOG_DBG("NOR in MemoryMapped mode at 0x%lx (0x%x bytes)",
+		(long)(dev_cfg->flash_base_address),
+		dev_cfg->flash_size);
+
+#else
 	LOG_INF("NOR external-flash at 0x%lx (0x%x bytes)",
 		(long)(dev_cfg->flash_base_address),
 		dev_cfg->flash_size);
+
+#endif /* CONFIG_STM32_MEMMAP */
 
 	return 0;
 }
