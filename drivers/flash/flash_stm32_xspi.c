@@ -1220,8 +1220,12 @@ static int flash_stm32_xspi_erase(const struct device *dev, off_t addr,
 
 #ifdef CONFIG_STM32_MEMMAP
 	if (stm32_xspi_is_memorymap(dev)) {
-		LOG_DBG("MemoryMap : cannot erase");
-		return 0;
+		/* If the Flash is in MemoryMapped mode, abort it and continue */
+		LOG_INF("MemoryMap : disable before erase");
+		if (stm32_xspi_abort_memmap(dev) != 0) {
+			LOG_ERR("MemoryMap not aborted correctly");
+			return -EIO;
+		}
 	}
 #endif /* CONFIG_STM32_MEMMAP */
 
@@ -1375,6 +1379,14 @@ static int flash_stm32_xspi_read(const struct device *dev, off_t addr,
 		return 0;
 	}
 #ifdef CONFIG_STM32_MEMMAP
+	/* If not MemMapped then configure it */
+	if (!stm32_xspi_is_memorymap(dev)) {
+		if (stm32_xspi_set_memorymap(dev) != 0) {
+			LOG_ERR("READ failed: cannot enable MemoryMap");
+			return -EIO;
+		}
+	}
+	LOG_INF("MemoryMap : enable before read");
 	if (stm32_xspi_is_memorymap(dev)) {
 		LOG_DBG("MemoryMapped Read offset: 0x%lx, len: %zu",
 			(long)(STM32_XSPI_BASE_ADDRESS + addr),
@@ -1477,6 +1489,18 @@ static int flash_stm32_xspi_write(const struct device *dev, off_t addr,
 	}
 #ifdef CONFIG_STM32_MEMMAP
 	if (stm32_xspi_is_memorymap(dev)) {
+		/* If the Flash is in MemoryMapped mode, abort it and continue */
+		LOG_INF("MemoryMap : disable before write");
+		if (stm32_xspi_abort_memmap(dev) != 0) {
+			LOG_ERR("MemoryMap not aborted correctly");
+			return -EIO;
+		}
+	}
+	if (stm32_xspi_is_memorymap(dev)) {
+		/*
+		 * If the Flash is in MemoryMapped mode, write by memcopy
+		 * should not due to previous operation
+		 */
 		LOG_DBG("MemoryMapped Write offset: 0x%lx, len: %zu",
 			(long)(STM32_XSPI_BASE_ADDRESS + addr),
 			size);
