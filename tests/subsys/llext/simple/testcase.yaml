@@ -27,10 +27,17 @@ tests:
 
   llext.simple.readonly:
     arch_exclude: xtensa # for now
-    filter: not CONFIG_MPU and not CONFIG_MMU and not CONFIG_SOC_SERIES_S32ZE
+    filter: not CONFIG_MPU and not CONFIG_MMU and not CONFIG_SOC_SERIES_S32ZE and not CONFIG_SOC_SERIES_STM32H7X
     extra_configs:
       - arch:arm:CONFIG_ARM_MPU=n
       - CONFIG_LLEXT_STORAGE_WRITABLE=n
+  llext.simple.stm32h7.readonly:
+    arch_exclude: xtensa # for now
+    filter: CONFIG_SOC_SERIES_STM32H7X and not CONFIG_MPU and not CONFIG_MMU and not CONFIG_SOC_SERIES_S32ZE
+    extra_configs:
+      - arch:arm:CONFIG_ARM_MPU=n
+      - CONFIG_LLEXT_STORAGE_WRITABLE=n
+      - CONFIG_ZTEST_STACK_SIZE=7168
   llext.simple.readonly_mpu:
     min_ram: 128
     arch_exclude: xtensa # for now
