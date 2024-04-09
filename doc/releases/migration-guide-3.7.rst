@@ -126,6 +126,9 @@ Display
 Flash
 =====
 
+* The STM32 devices with xSPI peripherals, like the stm32h5 serie, now have their own compatible
+  and flash controller driver
+
 General Purpose I/O (GPIO)
 ==========================
 
