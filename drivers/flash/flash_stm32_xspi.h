@@ -7,6 +7,19 @@
 #ifndef ZEPHYR_DRIVERS_FLASH_XSPI_STM32_H_
 #define ZEPHYR_DRIVERS_FLASH_XSPI_STM32_H_
 
+/* Macro to check if any xspi device has a domain clock or more */
+#define STM32_XSPI_DOMAIN_CLOCK_INST_SUPPORT(inst) \
+	DT_CLOCKS_HAS_IDX(DT_INST_PARENT(inst), 1) ||
+#define STM32_XSPI_INST_DEV_DOMAIN_CLOCK_SUPPORT				\
+	(DT_INST_FOREACH_STATUS_OKAY(STM32_XSPI_DOMAIN_CLOCK_INST_SUPPORT) 0)
+
+/* This symbol is 1 if any xspi device is configured in dts with a domain clock */
+#if STM32_XSPI_INST_DEV_DOMAIN_CLOCK_SUPPORT
+#define STM32_XSPI_DOMAIN_CLOCK_SUPPORT 1
+#else
+#define STM32_XSPI_DOMAIN_CLOCK_SUPPORT 0
+#endif
+
 #define STM32_XSPI_FIFO_THRESHOLD       4U
 
 /* Valid range is [0, 255] */
@@ -27,18 +40,15 @@
 typedef void (*irq_config_func_t)(const struct device *dev);
 
 struct flash_stm32_xspi_config {
-	const struct stm32_pclken pclken; /* clock subsystem */
-	const struct stm32_pclken pclken_ker; /* clock subsystem */
-	const struct stm32_pclken pclken_mgr; /* clock subsystem */
+	const struct stm32_pclken *pclken;
+	size_t pclk_len;
 	irq_config_func_t irq_config;
+	uint32_t flash_base_address;
 	size_t flash_size;
 	uint32_t max_frequency;
 	int data_mode; /* SPI or QSPI or OSPI */
 	int data_rate; /* DTR or STR */
 	const struct pinctrl_dev_config *pcfg;
-#if STM32_XSPI_RESET_GPIO
-	const struct gpio_dt_spec reset;
-#endif /* STM32_XSPI_RESET_GPIO */
 };
 
 struct flash_stm32_xspi_data {
