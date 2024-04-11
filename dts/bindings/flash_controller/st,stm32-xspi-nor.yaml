@@ -23,6 +23,15 @@ include:
       - spi-bus-width
       - data-rate
 properties:
+  st,xip:
+    type: boolean
+    description: |
+      Enables The XIP mode on this xspi instance.
+      If set, the external Flash is configured in MemoryMapped mode
+      for XiP at the address set by the <reg> property.
+      This property gives the priority for the external memory settings
+      like data-mode, data-rate, ospi-max-frequency.
+      Only one XiP instance is possible when OPI/DTR mode
   spi-bus-width:
     type: int
     required: true
