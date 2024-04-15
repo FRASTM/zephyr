@@ -18,6 +18,8 @@
 		zephyr,console = &uart4;
 		zephyr,shell-uart = &uart4;
 		zephyr,sram = &sram0;
+		zephyr,flash = &mx66uw1g45;
+		zephyr,code-partition = &slot0_partition;
 	};
 
 	leds {
