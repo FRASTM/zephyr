@@ -11,6 +11,7 @@ LOG_MODULE_REGISTER(spi_loopback);
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include <string.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
 #include <zephyr/ztest.h>
@@ -726,9 +727,11 @@ end:
 static void *spi_loopback_setup(void)
 {
 	memset(buffer_tx, 0, sizeof(buffer_tx));
-	memcpy(buffer_tx, tx_data, sizeof(tx_data));
+//	memcpy(buffer_tx, tx_data, sizeof(tx_data));
+	strcpy(buffer_tx, tx_data);
 	memset(buffer2_tx, 0, sizeof(buffer2_tx));
-	memcpy(buffer2_tx, tx2_data, sizeof(tx2_data));
+//	memcpy(buffer2_tx, tx2_data, sizeof(tx2_data));
+	strcpy(buffer2_tx, tx2_data);
 	return NULL;
 }
 
