@@ -1,0 +1,17 @@
+/*
+ * Copyright (c) 2024 STMicroelectronics
+ * Copyright (c) 2023 Benjamin Deuter
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+dut: &usart3 {
+	status = "okay";
+	dmas = <&gpdma1 2 26 STM32_DMA_PERIPH_TX>,
+		<&gpdma1 3 25 STM32_DMA_PERIPH_RX>;
+	dma-names = "tx", "rx";
+};
+
+&gpdma1 {
+	status = "okay";
+};
