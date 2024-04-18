@@ -67,14 +67,13 @@ struct flash_stm32_xspi_config {
 	const struct stm32_pclken *pclken;
 	size_t pclk_len;
 	irq_config_func_t irq_config;
+	uint32_t flash_base_address;
 	size_t flash_size;
 	uint32_t max_frequency;
 	int data_mode; /* SPI or QSPI or OSPI */
 	int data_rate; /* DTR or STR */
 	const struct pinctrl_dev_config *pcfg;
-#if STM32_XSPI_RESET_GPIO
 	const struct gpio_dt_spec reset;
-#endif /* STM32_XSPI_RESET_GPIO */
 };
 
 struct flash_stm32_xspi_data {
