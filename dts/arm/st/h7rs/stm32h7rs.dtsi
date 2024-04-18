@@ -885,8 +885,9 @@
 			compatible = "st,stm32-xspi";
 			reg = <0x52005000 0x400>;
 			interrupts = <105 0>;
-			clock-names = "ospix";
-			clocks = <&rcc STM32_CLOCK_BUS_AHB5 0x00000020>;
+			clock-names = "ospix", "ospi-ker";
+			clocks = <&rcc STM32_CLOCK_BUS_AHB5 0x00000020>,
+				 <&rcc STM32_SRC_PLL2_S XSPI1_SEL(1)>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "disabled";
