@@ -2180,6 +2180,10 @@ static int flash_stm32_xspi_init(const struct device *dev)
 #endif /* STM32_XSPI_DLYB_BYPASSED */
 #endif /* HAL_XSPI_DELAY_BLOCK_ON */
 
+#if defined(CONFIG_SOC_SERIES_STM32H7RSX)
+	dev_data->hxspi.Init.MemorySelect = HAL_XSPI_CSSEL_OVR_NCS1;
+#endif /* CONFIG_SOC_SERIES_STM32H7RSX */
+
 	if (HAL_XSPI_Init(&dev_data->hxspi) != HAL_OK) {
 		LOG_ERR("XSPI Init failed");
 		return -EIO;
@@ -2196,7 +2200,8 @@ static int flash_stm32_xspi_init(const struct device *dev)
 		xspi_mgr_cfg.nCSOverride = HAL_XSPI_CSSEL_OVR_NCS1;
 	} else if (dev_data->hxspi.Instance == XSPI2) {
 		xspi_mgr_cfg.IOPort = HAL_XSPIM_IOPORT_2;
-		xspi_mgr_cfg.nCSOverride = HAL_XSPI_CSSEL_OVR_NCS2;
+//		xspi_mgr_cfg.nCSOverride = HAL_XSPI_CSSEL_OVR_NCS2;
+		xspi_mgr_cfg.nCSOverride = HAL_XSPI_CSSEL_OVR_NCS1;
 	}
 	xspi_mgr_cfg.Req2AckTime = 1;
 
@@ -2205,6 +2210,8 @@ static int flash_stm32_xspi_init(const struct device *dev)
 		LOG_ERR("XSPI M config failed");
 		return -EIO;
 	}
+
+	LOG_DBG("XSPI M config'd");
 
 #endif /* XSPIM */
 
@@ -2243,7 +2250,7 @@ static int flash_stm32_xspi_init(const struct device *dev)
 
 	LOG_DBG("Reset Mem (SPI/STR)");
 
-#if defined(CONFIG_SOC_SERIES_STM32H7RSX) && defined(CONFIG_STM32_MEMMAP)
+#if defined(CONFIG_SOC_SERIES_STM32H7RSX) && !defined(CONFIG_STM32_MEMMAP)
 	if ((dev_cfg->data_mode == XSPI_OCTO_MODE)
 		&& (dev_cfg->data_rate == XSPI_DTR_TRANSFER)) {
 		/* Going to set directly the OCTO mode (DTR transfer rate) */
@@ -2261,7 +2268,9 @@ static int flash_stm32_xspi_init(const struct device *dev)
 			return -EIO;
 		}
 	}
+#endif /* CONFIG_SOC_SERIES_STM32H7RSX */
 
+#if defined(CONFIG_STM32_MEMMAP)
 	/* Now configure the octo Flash in MemoryMapped (access by address) */
 	ret = stm32_xspi_set_memorymap(dev);
 	if (ret != 0) {
@@ -2273,7 +2282,7 @@ static int flash_stm32_xspi_init(const struct device *dev)
 		dev_cfg->flash_size);
 
 	return 0;
-#endif /* CONFIG_SOC_SERIES_STM32H7RSX */
+#endif /*CONFIG_STM32_MEMMAP */
 
 	/* Check if memory is ready in the SPI/STR mode */
 	if (stm32_xspi_mem_ready(dev,
@@ -2522,7 +2531,7 @@ static struct flash_stm32_xspi_data flash_stm32_xspi_dev_data_##idx = {			\
 					: HAL_XSPI_SAMPLE_SHIFT_NONE),			\
 			.ChipSelectHighTimeCycle = 1,					\
 			.ClockMode = HAL_XSPI_CLOCK_MODE_0,				\
-			.ChipSelectBoundary = 0,					\
+			.ChipSelectBoundary = HAL_XSPI_BONDARYOF_8KB,					\
 			.MemoryMode = HAL_XSPI_SINGLE_MEM,				\
 			.FreeRunningClock = HAL_XSPI_FREERUNCLK_DISABLE,		\
 			STM32_XSPI_REFRESH(idx)						\
