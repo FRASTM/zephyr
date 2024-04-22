@@ -490,6 +490,98 @@ static int stm32_xspi_mem_ready(const struct device *dev, uint8_t nor_mode,
 	return stm32_xspi_wait_auto_polling(dev, &s_config, HAL_XSPI_TIMEOUT_DEFAULT_VALUE);
 }
 
+
+/* This function configure the memory in Octal DTR mode */
+static int stm32_xspi_octoDTR_enable(struct flash_stm32_xspi_data *dev_data,
+		uint8_t nor_mode, uint8_t nor_rate)
+{
+	uint8_t reg = 0;
+	XSPI_HandleTypeDef *hxspi = &dev_data->hxspi;
+	XSPI_AutoPollingTypeDef s_config = {0};
+	XSPI_RegularCmdTypeDef s_command;
+
+	s_command.OperationType      = HAL_XSPI_OPTYPE_COMMON_CFG;
+	s_command.InstructionMode    = HAL_XSPI_INSTRUCTION_1_LINE;
+	s_command.InstructionWidth   = HAL_XSPI_INSTRUCTION_8_BITS;
+	s_command.InstructionDTRMode = HAL_XSPI_INSTRUCTION_DTR_DISABLE;
+	s_command.AddressDTRMode     = HAL_XSPI_ADDRESS_DTR_DISABLE;
+	s_command.AlternateBytesMode = HAL_XSPI_ALT_BYTES_NONE;
+	s_command.DataDTRMode        = HAL_XSPI_DATA_DTR_DISABLE;
+	s_command.DummyCycles        = 0;
+	s_command.DQSMode            = HAL_XSPI_DQS_DISABLE;
+
+	s_config.MatchMode       = HAL_XSPI_MATCH_MODE_AND;
+	s_config.IntervalTime    = SPI_NOR_AUTO_POLLING_INTERVAL;
+	s_config.AutomaticStop   = HAL_XSPI_AUTOMATIC_STOP_ENABLE;
+
+	/* Enable write operations */
+	s_command.Instruction = SPI_NOR_CMD_WREN;
+	s_command.DataMode    = HAL_XSPI_DATA_NONE;
+	s_command.AddressMode = HAL_XSPI_ADDRESS_NONE;
+
+	if (HAL_XSPI_Command(hxspi, &s_command, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
+		LOG_ERR("XSPI flash write enable cmd failed");
+		return -EIO;
+	}
+
+	/* Reconfigure XSPI to automatic polling mode to wait for write enabling */
+	s_config.MatchValue      = SPI_NOR_WREN_MATCH;
+	s_config.MatchMask       = SPI_NOR_WREN_MASK;
+
+	s_command.Instruction    = SPI_NOR_CMD_RDSR;
+	s_command.DataMode       = HAL_XSPI_DATA_1_LINE;
+	s_command.DataLength     = 1;
+
+	if (HAL_XSPI_Command(hxspi, &s_command, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
+		LOG_ERR("XSPI config octoDTR cmd failed");
+		return -EIO;
+	}
+
+	if (HAL_XSPI_AutoPolling(hxspi, &s_config, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
+		LOG_ERR("XSPI config octoDTR failed");
+		return -EIO;
+	}
+
+	/* Write Configuration register 2 (with Octal I/O SPI protocol) */
+	s_command.Instruction = SPI_NOR_CMD_WR_CFGREG2;
+	s_command.AddressMode = HAL_XSPI_ADDRESS_1_LINE;
+	s_command.AddressWidth = HAL_XSPI_ADDRESS_32_BITS;
+	s_command.Address = 0;
+	reg = 0x2;
+
+	if (HAL_XSPI_Command(hxspi, &s_command, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+	{
+		LOG_ERR("XSPI config auto polling cmd failed");
+		return -EIO;
+	}
+
+	if (HAL_XSPI_Transmit(hxspi, &reg, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+	{
+		LOG_ERR("XSPI config auto polling cmd failed");
+		return -EIO;
+	}
+
+	s_command.Instruction = SPI_NOR_CMD_RDSR;
+	s_command.AddressMode = HAL_XSPI_ADDRESS_1_LINE;
+	s_command.DataLength  = 1;
+
+	if (HAL_XSPI_Command(hxspi, &s_command, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+	{
+		LOG_ERR("XSPI config auto polling cmd failed");
+		return -EIO;
+	}
+
+	if (HAL_XSPI_AutoPolling(hxspi, &s_config, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+	{
+		LOG_ERR("XSPI config auto polling cmd failed");
+		return -EIO;
+	}
+
+	LOG_INF("XSPI flash config is octal DTR");
+
+	return 0;
+}
+
 /* Enables writing to the memory sending a Write Enable and wait it is effective */
 static int stm32_xspi_write_enable(const struct device *dev,
 		uint8_t nor_mode, uint8_t nor_rate)
@@ -1991,12 +2083,31 @@ static int flash_stm32_xspi_init(const struct device *dev)
 	}
 #endif /* CONFIG_FLASH_JESD216_API */
 
+#if defined(CONFIG_SOC_SERIES_STM32H7RSX)
+	if ((dev_cfg->data_mode == XSPI_OCTO_MODE)
+		&& (dev_cfg->data_rate == XSPI_DTR_TRANSFER)) {
+		/* Going to set directly the OCTO mode (DTR transfer rate) */
+		LOG_DBG("XSPI configuring Octo SPI & DTR mode");
+
+		if (stm32_xspi_octoDTR_enable(dev_data,
+			XSPI_OCTO_MODE, XSPI_DTR_TRANSFER) != 0) {
+			LOG_ERR("XSPI config Octo SPI & DTR failed");
+			return -EIO;
+		}
+	} else {
+		if (stm32_xspi_config_mem(dev) != 0) {
+			LOG_ERR("XSPI mode not config'd (%u rate %u)",
+				dev_cfg->data_mode, dev_cfg->data_rate);
+			return -EIO;
+		}
+	}
+#else
 	if (stm32_xspi_config_mem(dev) != 0) {
-		LOG_ERR("OSPI mode not config'd (%u rate %u)",
+		LOG_ERR("XSPI mode not config'd (%u rate %u)",
 			dev_cfg->data_mode, dev_cfg->data_rate);
 		return -EIO;
 	}
-
+#endif /* CONFIG_SOC_SERIES_STM32H7RSX */
 	/* Send the instruction to read the SFDP  */
 	const uint8_t decl_nph = 2;
 	union {
