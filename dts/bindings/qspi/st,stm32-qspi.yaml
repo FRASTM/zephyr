@@ -59,12 +59,19 @@ properties:
       For example
          dma-names = "tx_rx";
 
+  dual-flash:
+    type: boolean
+    description: |
+      Configure the flash controller in Dual Flash Mode so that two quad-Flash are accessed
+      simultaneously. If true, the flash-id property is ignored.
+
   flash-id:
     type: int
     description: |
       FLash ID number. This number, if defined, helps to select the right
-      QSPI GPIO banks (defined as 'quadspi_bk[12]' in pinctrl property)
+      QSPI GPIO banks (defined as 'quadspi_bk[1/2]' in pinctrl property)
       to communicate with flash memory.
+      Ignored if Dual Flash Mode.
 
       For example
-         flash-id = <2>;
+         flash-id = <1>;

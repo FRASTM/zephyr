@@ -1281,14 +1281,25 @@ static int flash_stm32_qspi_init(const struct device *dev)
 	/* Give a bit position from 0 to 31 to the HAL init minus 1 for the DCR1 reg */
 	dev_data->hqspi.Init.FlashSize = find_lsb_set(dev_cfg->flash_size) - 2;
 
+#if DT_NODE_HAS_PROP(DT_NODELABEL(quadspi), dual_flash) && defined(QUADSPI_CR_DFM)
+	/*
+	 * When the DTS has dual-flash property set, it means Dual Flash
+	 * Even in DUAL flash config, the SDFP is read from one single quad-NOR
+	 * else the magic nb is wrong (0x46465353)
+	 * That means that the Dual Flash config is set after the SFDP sequence
+	 */
+	dev_data->hqspi.Init.ChipSelectHighTime = QSPI_CS_HIGH_TIME_3_CYCLE;
+	dev_data->hqspi.Init.DualFlash = QSPI_DUALFLASH_DISABLE;
+	/* Set Dual Flash Mode only on MemoryMapped */
+	dev_data->hqspi.Init.FlashID = QSPI_FLASH_ID_1; /* Force the Flash ID 1 */
+#endif /* dual_flash */
+
 	HAL_QSPI_Init(&dev_data->hqspi);
 
-#if DT_NODE_HAS_PROP(DT_NODELABEL(quadspi), flash_id)
 	uint8_t qspi_flash_id = DT_PROP(DT_NODELABEL(quadspi), flash_id);
 
 	HAL_QSPI_SetFlashID(&dev_data->hqspi,
 			    (qspi_flash_id - 1) << QUADSPI_CR_FSEL_Pos);
-#endif
 	/* Initialize semaphores */
 	k_sem_init(&dev_data->sem, 1, 1);
 	k_sem_init(&dev_data->sync, 0, 1);
@@ -1366,6 +1377,17 @@ static int flash_stm32_qspi_init(const struct device *dev)
 		return -ENODEV;
 	}
 #endif /* CONFIG_FLASH_PAGE_LAYOUT */
+
+#if DT_NODE_HAS_PROP(DT_NODELABEL(quadspi), dual_flash) && defined(QUADSPI_CR_DFM)
+	/*
+	 * When the DTS has dual-flash property, then set the Dual Flash Mode now
+	 * Force Dual Flash mode now, after the SFDP sequence which is reading
+	 * one quad-NOR only
+	 */
+	MODIFY_REG(dev_data->hqspi.Instance->CR, (QUADSPI_CR_DFM), QSPI_DUALFLASH_ENABLE);
+	LOG_DBG("Dual Flash Mode");
+
+#endif /* dual_flash*/
 
 	LOG_INF("NOR quad-flash at 0x%lx (0x%x bytes)",
 		(long)(STM32_QSPI_BASE_ADDRESS),
