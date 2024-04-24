@@ -32,7 +32,6 @@
 /* used as default value for DTS writeoc */
 #define SPI_NOR_WRITEOC_NONE 0xFF
 
-#if STM32_XSPI_USE_DMA
 /* Lookup table to set dma priority from the DTS */
 static const uint32_t table_priority[] = {
 	DMA_LOW_PRIORITY_LOW_WEIGHT,
@@ -57,7 +56,6 @@ struct stream {
 	bool src_addr_increment;
 	bool dst_addr_increment;
 };
-#endif /* STM32_XSPI_USE_DMA */
 
 typedef void (*irq_config_func_t)(const struct device *dev);
 
@@ -65,14 +63,12 @@ struct flash_stm32_xspi_config {
 	const struct stm32_pclken *pclken;
 	size_t pclk_len;
 	irq_config_func_t irq_config;
+	uint32_t flash_base_address;
 	size_t flash_size;
 	uint32_t max_frequency;
 	int data_mode; /* SPI or QSPI or OSPI */
 	int data_rate; /* DTR or STR */
 	const struct pinctrl_dev_config *pcfg;
-#if STM32_XSPI_RESET_GPIO
-	const struct gpio_dt_spec reset;
-#endif /* STM32_XSPI_RESET_GPIO */
 };
 
 struct flash_stm32_xspi_data {
@@ -99,10 +95,8 @@ struct flash_stm32_xspi_data {
 	uint8_t jedec_id[JESD216_READ_ID_LEN];
 #endif /* CONFIG_FLASH_JESD216_API */
 	int cmd_status;
-#if STM32_XSPI_USE_DMA
 	struct stream dma_tx;
 	struct stream dma_rx;
-#endif /* STM32_XSPI_USE_DMA */
 };
 
 #endif /* ZEPHYR_DRIVERS_FLASH_XSPI_STM32_H_ */
