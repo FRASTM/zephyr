@@ -39,6 +39,18 @@ to 0x90000000.
    :goals: build flash
    :compact:
 
+STM32H745I-Discovery platform instructions
+******************************************
+
+The stm32h745i_disco has 64MB of external flash attached via QSPI. It is mapped
+to 0x90000000.
+
+.. zephyr-app-commands::
+   :zephyr-app: samples/application_development/code_relocation_nocopy
+   :board: stm32h745i_disco/stm32h745xx/m7
+   :goals: build flash
+   :compact:
+
 Execution output
 ****************
 
