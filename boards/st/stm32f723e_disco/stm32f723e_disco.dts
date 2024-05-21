@@ -128,9 +128,10 @@
 		compatible = "st,stm32-qspi-nor";
 		reg = <0x90000000 DT_SIZE_M(64)>; /* 512 Mbits */
 		qspi-max-frequency = <8000000>;
-		status = "okay";
+		reset-cmd;
 		spi-bus-width = <4>;
 		writeoc = "PP_1_4_4";
+		status = "okay";
 	};
 };
 

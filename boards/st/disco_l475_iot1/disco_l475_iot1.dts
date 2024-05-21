@@ -326,6 +326,7 @@ zephyr_udc0: &usbotg_fs {
 		compatible = "st,stm32-qspi-nor";
 		reg = <0x90000000 DT_SIZE_M(8)>; /* 64 Mbits */
 		qspi-max-frequency = <50000000>;
+		reset-cmd;
 		status = "okay";
 
 		partitions {

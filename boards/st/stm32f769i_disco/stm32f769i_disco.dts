@@ -188,6 +188,7 @@ arduino_serial: &usart6 {};
 		compatible = "st,stm32-qspi-nor";
 		reg = <0x90000000 DT_SIZE_M(64)>; /* 512 Mbits */
 		qspi-max-frequency = <DT_FREQ_M(66)>;
+		reset-cmd;
 		status = "okay";
 
 		partitions {

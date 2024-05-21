@@ -85,6 +85,7 @@
 			qspi-max-frequency = <80000000>;
 			jedec-id = [ef 40 18];
 			spi-bus-width = <4>;
+			reset-cmd;
 			status = "okay";
 	};
 };
