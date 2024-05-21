@@ -12,6 +12,7 @@ description: |
                 qspi-max-frequency = <80000000>;
                 reset-gpios = <&gpiod 3 GPIO_ACTIVE_LOW>;
                 reset-gpios-duration = <1>;
+                reset-cmd;
                 spi-bus-width = <4>;
                 status = "okay";
         };
@@ -38,7 +39,7 @@ properties:
     description: The duration (in ms) for the flash memory reset pulse
   reset-cmd:
     type: boolean
-    description: Send reset command on initialization
+    description: Send reset command on initialization (almost all boards/st)
   reset-cmd-wait:
     type: int
     default: 10

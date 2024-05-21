@@ -34,8 +34,8 @@
 /* Get the base address of the flash from the DTS node */
 #define STM32_QSPI_BASE_ADDRESS DT_INST_REG_ADDR(0)
 
-#define STM32_QSPI_RESET_GPIO DT_INST_NODE_HAS_PROP(0, reset_gpios)
-#define STM32_QSPI_RESET_CMD DT_INST_NODE_HAS_PROP(0, reset_cmd)
+#define STM32_QSPI_RESET_GPIO	DT_INST_NODE_HAS_PROP(0, reset_gpios)
+#define STM32_QSPI_RESET_CMD	DT_PROP(DT_DRV_INST(0), reset_cmd)
 
 #include <stm32_ll_dma.h>
 
@@ -1281,6 +1281,9 @@ static int flash_stm32_qspi_send_reset(const struct device *dev)
 		LOG_ERR("%d: Failed to send RESET_MEM", ret);
 		return ret;
 	}
+	LOG_DBG("Reset command to NOR quad-flash");
+	/* Wait for at least for 10us */
+	k_busy_wait(DT_INST_PROP(0, reset_cmd_wait));
 	return 0;
 }
 #endif
@@ -1415,7 +1418,6 @@ static int flash_stm32_qspi_init(const struct device *dev)
 
 #if STM32_QSPI_RESET_CMD
 	flash_stm32_qspi_send_reset(dev);
-	k_busy_wait(DT_INST_PROP(0, reset_cmd_wait));
 #endif
 
 	/* Run NOR init */
