@@ -30,20 +30,6 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(flash_stm32_xspi, CONFIG_FLASH_LOG_LEVEL);
 
-#define STM32_XSPI_NODE DT_INST_PARENT(0)
-
-#define DT_XSPI_IO_PORT_PROP_OR(prop, default_value)					\
-	COND_CODE_1(DT_NODE_HAS_PROP(STM32_XSPI_NODE, prop),				\
-		    (_CONCAT(HAL_XSPIM_, DT_STRING_TOKEN(STM32_XSPI_NODE, prop))),	\
-		    ((default_value)))
-
-/* Get the base address of the flash from the DTS node */
-#define STM32_XSPI_BASE_ADDRESS DT_INST_REG_ADDR(0)
-
-#define STM32_XSPI_RESET_GPIO DT_INST_NODE_HAS_PROP(0, reset_gpios)
-
-#define STM32_XSPI_DLYB_BYPASSED DT_PROP(STM32_XSPI_NODE, dlyb_bypass)
-
 #include "flash_stm32_xspi.h"
 
 static inline void xspi_lock_thread(const struct device *dev)
@@ -2002,77 +1988,89 @@ static int flash_stm32_xspi_init(const struct device *dev)
 	return 0;
 }
 
-#define XSPI_FLASH_MODULE(drv_id, flash_id)				\
-		(DT_DRV_INST(drv_id), xspi_nor_flash_##flash_id)
+#define STM32_XSPI_NODE(idx) DT_INST_PARENT(idx)
 
-#define DT_WRITEOC_PROP_OR(inst, default_value)							\
-	COND_CODE_1(DT_INST_NODE_HAS_PROP(inst, writeoc),					\
-		    (_CONCAT(SPI_NOR_CMD_, DT_STRING_TOKEN(DT_DRV_INST(inst), writeoc))),	\
-		    ((default_value)))
+#define STM32_XSPI_USE_RESET(idx)						\
+	COND_CODE_1(DT_INST_NODE_HAS_PROP(idx, reset_gpios),			\
+			(GPIO_DT_SPEC_INST_GET(idx, reset_gpios)),		\
+			(EMPTY))
 
-#define DT_QER_PROP_OR(inst, default_value)							\
-	COND_CODE_1(DT_INST_NODE_HAS_PROP(inst, quad_enable_requirements),			\
-		    (_CONCAT(JESD216_DW15_QER_VAL_,						\
-			     DT_STRING_TOKEN(DT_DRV_INST(inst), quad_enable_requirements))),	\
-		    ((default_value)))
-
-static void flash_stm32_xspi_irq_config_func(const struct device *dev);
-
-static const struct stm32_pclken pclken[] = STM32_DT_CLOCKS(STM32_XSPI_NODE);
-
-PINCTRL_DT_DEFINE(STM32_XSPI_NODE);
-
-static const struct flash_stm32_xspi_config flash_stm32_xspi_cfg = {
-	.pclken = pclken,
-	.pclk_len = DT_NUM_CLOCKS(STM32_XSPI_NODE),
-	.irq_config = flash_stm32_xspi_irq_config_func,
-	.flash_size = DT_INST_REG_ADDR_BY_IDX(0, 1),
-	.max_frequency = DT_INST_PROP(0, ospi_max_frequency),
-	.data_mode = DT_INST_PROP(0, spi_bus_width), /* SPI or OPI */
-	.data_rate = DT_INST_PROP(0, data_rate), /* DTR or STR */
-	.pcfg = PINCTRL_DT_DEV_CONFIG_GET(STM32_XSPI_NODE),
-#if STM32_XSPI_RESET_GPIO
-	.reset = GPIO_DT_SPEC_INST_GET(0, reset_gpios),
-#endif /* STM32_XSPI_RESET_GPIO */
-#if DT_NODE_HAS_PROP(DT_INST(0, st_stm32_ospi_nor), sfdp_bfp)
-	.sfdp_bfp = DT_INST_PROP(0, sfdp_bfp),
-#endif /* sfdp_bfp */
-};
-
-static struct flash_stm32_xspi_data flash_stm32_xspi_dev_data = {
-	.hxspi = {
-		.Instance = (XSPI_TypeDef *)DT_REG_ADDR(STM32_XSPI_NODE),
-		.Init = {
-			.FifoThresholdByte = STM32_XSPI_FIFO_THRESHOLD,
-			.SampleShifting = (DT_PROP(STM32_XSPI_NODE, ssht_enable)
-					? HAL_XSPI_SAMPLE_SHIFT_HALFCYCLE
-					: HAL_XSPI_SAMPLE_SHIFT_NONE),
-			.ChipSelectHighTimeCycle = 1,
-			.ClockMode = HAL_XSPI_CLOCK_MODE_0,
-			.ChipSelectBoundary = 0,
-			.MemoryMode = HAL_XSPI_SINGLE_MEM,
-			.FreeRunningClock = HAL_XSPI_FREERUNCLK_DISABLE,
 #if defined(OCTOSPI_DCR4_REFRESH)
-			.Refresh = 0,
-#endif /* OCTOSPI_DCR4_REFRESH */
-		},
-	},
-	.qer_type = DT_QER_PROP_OR(0, JESD216_DW15_QER_VAL_S1B6),
-	.write_opcode = DT_WRITEOC_PROP_OR(0, SPI_NOR_WRITEOC_NONE),
-	.page_size = SPI_NOR_PAGE_SIZE, /* by default, to be updated by sfdp */
-#if DT_NODE_HAS_PROP(DT_INST(0, st_stm32_ospi_nor), jedec_id)
-	.jedec_id = DT_INST_PROP(0, jedec_id),
-#endif /* jedec_id */
-};
+#define STM32_XSPI_REFRESH(idx)							\
+		.Refresh = 0,
+#else
+#define STM32_XSPI_REFRESH(idx)
+#endif
 
-static void flash_stm32_xspi_irq_config_func(const struct device *dev)
-{
-	IRQ_CONNECT(DT_IRQN(STM32_XSPI_NODE), DT_IRQ(STM32_XSPI_NODE, priority),
-		    flash_stm32_xspi_isr, DEVICE_DT_INST_GET(0), 0);
-	irq_enable(DT_IRQN(STM32_XSPI_NODE));
-}
+#define STM32_XSPI_DLYB_BYPASSED(idx) DT_PROP(STM32_XSPI_NODE(idx), dlyb_bypass)
 
-DEVICE_DT_INST_DEFINE(0, &flash_stm32_xspi_init, NULL,
-		      &flash_stm32_xspi_dev_data, &flash_stm32_xspi_cfg,
-		      POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
+#define DT_WRITEOC_PROP_OR(inst, default_value)					\
+	COND_CODE_1(DT_INST_NODE_HAS_PROP(inst, writeoc),			\
+		    (_CONCAT(SPI_NOR_CMD_,					\
+			     DT_STRING_TOKEN(DT_DRV_INST(inst), writeoc))),	\
+		    ((default_value)))
+
+#define DT_QER_PROP_OR(inst, default_value)					\
+	COND_CODE_1(DT_INST_NODE_HAS_PROP(inst, quad_enable_requirements),	\
+		    (_CONCAT(JESD216_DW15_QER_VAL_,				\
+			     DT_STRING_TOKEN(DT_DRV_INST(inst),			\
+					     quad_enable_requirements))),	\
+		    ((default_value)))
+
+#define STM32_XSPI_INIT(idx)							\
+static void flash_stm32_xspi_irq_config_func_##idx(const struct device *dev);	\
+										\
+static const struct stm32_pclken pclken_##idx[] =				\
+	STM32_DT_CLOCKS(STM32_XSPI_NODE(idx));					\
+										\
+PINCTRL_DT_DEFINE(STM32_XSPI_NODE(idx));					\
+										\
+static const struct flash_stm32_xspi_config flash_stm32_xspi_cfg_##idx = {	\
+	.pclken = pclken_##idx,							\
+	.pclk_len = DT_NUM_CLOCKS(STM32_XSPI_NODE(idx)),			\
+	.irq_config = flash_stm32_xspi_irq_config_func_##idx,			\
+	.flash_size = DT_INST_REG_ADDR_BY_IDX(idx, 1),				\
+	.max_frequency = DT_INST_PROP(idx, ospi_max_frequency),			\
+	.data_mode = DT_INST_PROP(idx, spi_bus_width),				\
+	.data_rate = DT_INST_PROP(idx, data_rate),				\
+	.pcfg = PINCTRL_DT_DEV_CONFIG_GET(STM32_XSPI_NODE(idx)),		\
+	STM32_XSPI_USE_RESET(idx)						\
+};										\
+\
+static struct flash_stm32_xspi_data flash_stm32_xspi_dev_data_##idx = {		\
+	.hxspi = {								\
+		.Instance = (XSPI_TypeDef *)DT_REG_ADDR(STM32_XSPI_NODE(idx)),	\
+		.Init = {							\
+			.FifoThresholdByte = STM32_XSPI_FIFO_THRESHOLD,		\
+			.SampleShifting =					\
+				(DT_PROP(STM32_XSPI_NODE(idx), ssht_enable)	\
+					? HAL_XSPI_SAMPLE_SHIFT_HALFCYCLE	\
+					: HAL_XSPI_SAMPLE_SHIFT_NONE),		\
+			.ChipSelectHighTimeCycle = 1,				\
+			.ClockMode = HAL_XSPI_CLOCK_MODE_0,			\
+			.ChipSelectBoundary = 0,				\
+			.MemoryMode = HAL_XSPI_SINGLE_MEM,			\
+			.FreeRunningClock = HAL_XSPI_FREERUNCLK_DISABLE,	\
+			STM32_XSPI_REFRESH(idx)					\
+		},								\
+	},									\
+	.qer_type = DT_QER_PROP_OR(idx, JESD216_DW15_QER_VAL_S1B6),		\
+	.write_opcode = DT_WRITEOC_PROP_OR(idx, SPI_NOR_WRITEOC_NONE),		\
+	.page_size = SPI_NOR_PAGE_SIZE,						\
+};										\
+\
+static void flash_stm32_xspi_irq_config_func_##idx(const struct device *dev)	\
+{										\
+	IRQ_CONNECT(DT_IRQN(STM32_XSPI_NODE(idx)),				\
+		    DT_IRQ(STM32_XSPI_NODE(idx), priority),			\
+		    flash_stm32_xspi_isr, DEVICE_DT_INST_GET(idx), 0);		\
+	irq_enable(DT_IRQN(STM32_XSPI_NODE(idx)));				\
+}										\
+\
+DEVICE_DT_INST_DEFINE(idx, &flash_stm32_xspi_init, NULL,			\
+		      &flash_stm32_xspi_dev_data_##idx,				\
+		      &flash_stm32_xspi_cfg_##idx,				\
+		      POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,		\
 		      &flash_stm32_xspi_driver_api);
+
+DT_INST_FOREACH_STATUS_OKAY(STM32_XSPI_INIT)
