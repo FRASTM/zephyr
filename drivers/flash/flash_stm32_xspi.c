@@ -30,6 +30,10 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(flash_stm32_xspi, CONFIG_FLASH_LOG_LEVEL);
 
+#include <zephyr/drivers/dma/dma_stm32.h>
+#include <zephyr/drivers/dma.h>
+#include <stm32_ll_dma.h>
+
 #include "flash_stm32_xspi.h"
 
 static inline void xspi_lock_thread(const struct device *dev)
@@ -83,7 +87,11 @@ static int xspi_read_access(const struct device *dev, XSPI_RegularCmdTypeDef *cm
 		return -EIO;
 	}
 
+#if STM32_XSPI_INST_USE_DMA
+	hal_ret = HAL_XSPI_Receive_DMA(&dev_data->hxspi, data);
+#else
 	hal_ret = HAL_XSPI_Receive_IT(&dev_data->hxspi, data);
+#endif
 
 	if (hal_ret != HAL_OK) {
 		LOG_ERR("%d: Failed to read data", hal_ret);
@@ -121,7 +129,11 @@ static int xspi_write_access(const struct device *dev, XSPI_RegularCmdTypeDef *c
 		return -EIO;
 	}
 
+#if STM32_XSPI_INST_USE_DMA
+	hal_ret = HAL_XSPI_Transmit_DMA(&dev_data->hxspi, (uint8_t *)data);
+#else
 	hal_ret = HAL_XSPI_Transmit_IT(&dev_data->hxspi, (uint8_t *)data);
+#endif
 
 	if (hal_ret != HAL_OK) {
 		LOG_ERR("%d: Failed to write data", hal_ret);
@@ -1204,6 +1216,23 @@ __weak HAL_StatusTypeDef HAL_DMA_Abort(DMA_HandleTypeDef *hdma)
 }
 #endif /* !CONFIG_SOC_SERIES_STM32H7X */
 
+/* This function is executed in the interrupt context */
+#if STM32_XSPI_INST_USE_DMA
+static void xspi_dma_callback(const struct device *dev, void *arg,
+			 uint32_t channel, int status)
+{
+	DMA_HandleTypeDef *hdma = arg;
+
+	ARG_UNUSED(dev);
+
+	if (status < 0) {
+		LOG_ERR("DMA callback error with channel %d.", channel);
+	}
+
+	HAL_DMA_IRQHandler(hdma);
+}
+#endif /* STM32_XSPI_INST_USE_DMA */
+
 /*
  * Transfer Error callback.
  */
@@ -1691,6 +1720,81 @@ static int spi_nor_process_bfp(const struct device *dev,
 	return 0;
 }
 
+#if STM32_XSPI_INST_USE_DMA
+static int flash_stm32_xspi_dma_init(DMA_HandleTypeDef *hdma, struct stream *dma_stream)
+{
+	int ret;
+	/*
+	 * DMA configuration
+	 * Due to use of XSPI HAL API in current driver,
+	 * both HAL and Zephyr DMA drivers should be configured.
+	 * The required configuration for Zephyr DMA driver should only provide
+	 * the minimum information to inform the DMA slot will be in used and
+	 * how to route callbacks.
+	 */
+
+	if (!device_is_ready(dma_stream->dev)) {
+		LOG_ERR("DMA %s device not ready", dma_stream->dev->name);
+		return -ENODEV;
+	}
+	/* Proceed to the minimum Zephyr DMA driver init of the channel */
+	dma_stream->cfg.user_data = hdma;
+	/* HACK: This field is used to inform driver that it is overridden */
+	dma_stream->cfg.linked_channel = STM32_DMA_HAL_OVERRIDE;
+	/* Because of the STREAM OFFSET, the DMA channel given here is from 1 - 8 */
+	ret = dma_config(dma_stream->dev,
+			 (dma_stream->channel + STM32_DMA_STREAM_OFFSET), &dma_stream->cfg);
+	if (ret != 0) {
+		LOG_ERR("Failed to configure DMA channel %d",
+			dma_stream->channel + STM32_DMA_STREAM_OFFSET);
+		return ret;
+	}
+
+	/* Proceed to the HAL DMA driver init */
+	if (dma_stream->cfg.source_data_size != dma_stream->cfg.dest_data_size) {
+		LOG_ERR("DMA Source and destination data sizes not aligned");
+		return -EINVAL;
+	}
+
+	hdma->Init.SrcDataWidth = DMA_SRC_DATAWIDTH_WORD; /* Fixed value */
+	hdma->Init.DestDataWidth = DMA_DEST_DATAWIDTH_WORD; /* Fixed value */
+	hdma->Init.SrcInc = (dma_stream->src_addr_increment) ? DMA_SINC_INCREMENTED : DMA_SINC_FIXED;
+	hdma->Init.DestInc = (dma_stream->dst_addr_increment) ? DMA_DINC_INCREMENTED : DMA_DINC_FIXED;
+	hdma->Init.SrcBurstLength = 4;
+	hdma->Init.DestBurstLength = 4;
+	hdma->Init.Priority = table_priority[dma_stream->cfg.channel_priority];
+	hdma->Init.Direction = table_direction[dma_stream->cfg.channel_direction];
+	hdma->Init.TransferAllocatedPort = DMA_SRC_ALLOCATED_PORT0 | DMA_SRC_ALLOCATED_PORT1;
+	hdma->Init.TransferEventMode = DMA_TCEM_BLOCK_TRANSFER;
+	hdma->Init.Mode = DMA_NORMAL;
+	hdma->Init.BlkHWRequest = DMA_BREQ_SINGLE_BURST;
+	hdma->Init.Request = dma_stream->cfg.dma_slot;
+
+	/*
+	 * HAL expects a valid DMA channel (not DMAMUX).
+	 * The channel is from 0 to 7 because of the STM32_DMA_STREAM_OFFSET
+	 * in the dma_stm32 driver
+	 */
+	hdma->Instance = LL_DMA_GET_CHANNEL_INSTANCE(dma_stream->reg,
+						    dma_stream->channel);
+
+	/* Initialize DMA HAL */
+	if (HAL_DMA_Init(hdma) != HAL_OK) {
+		LOG_ERR("XSPI DMA Init failed");
+		return -EIO;
+	}
+
+	if (HAL_DMA_ConfigChannelAttributes(hdma, DMA_CHANNEL_NPRIV) != HAL_OK) {
+		LOG_ERR("XSPI DMA Init failed");
+		return -EIO;
+	}
+
+	LOG_DBG("XSPI with DMA transfer");
+	return 0;
+}
+#endif /* STM32_XSPI_INST_USE_DMA */
+
+
 static int flash_stm32_xspi_init(const struct device *dev)
 {
 	const struct flash_stm32_xspi_config *dev_cfg = dev->config;
@@ -1843,6 +1947,30 @@ static int flash_stm32_xspi_init(const struct device *dev)
 
 #endif /* DLYB_ */
 
+#if STM32_XSPI_INST_USE_DMA
+	/* Configure and enable the DMA channels after XSPI config */
+	static DMA_HandleTypeDef hdma_tx;
+	static DMA_HandleTypeDef hdma_rx;
+
+	if (flash_stm32_xspi_dma_init(&hdma_tx, &dev_data->dma_tx) != 0) {
+		LOG_ERR("XSPI DMA Tx init failed");
+		return -EIO;
+	}
+	LOG_DBG("XSPI DMA Tx channel %d", dev_data->dma_tx.channel);
+
+	/* The dma_tx handle is hold by the dma_stream.cfg.user_data */
+	__HAL_LINKDMA(&dev_data->hxspi, hdmatx, hdma_tx);
+
+	if (flash_stm32_xspi_dma_init(&hdma_rx, &dev_data->dma_rx) != 0) {
+		LOG_ERR("XSPI DMA Rx init failed");
+		return -EIO;
+	}
+	LOG_DBG("XSPI DMA Rx channel %d", dev_data->dma_rx.channel);
+
+	/* The dma_rx handle is hold by the dma_stream.cfg.user_data */
+	__HAL_LINKDMA(&dev_data->hxspi, hdmarx, hdma_rx);
+
+#endif /* CONFIG_USE_STM32_HAL_DMA */
 	/* Initialize semaphores */
 	k_sem_init(&dev_data->sem, 1, 1);
 	k_sem_init(&dev_data->sync, 0, 1);
@@ -1990,9 +2118,48 @@ static int flash_stm32_xspi_init(const struct device *dev)
 
 #define STM32_XSPI_NODE(idx) DT_INST_PARENT(idx)
 
+#if STM32_XSPI_INST_USE_DMA
+#define DMA_CHANNEL_CONFIG(idx, dir)						\
+		DT_DMAS_CELL_BY_NAME(idx, dir, channel_config)
+
+#define XSPI_DMA_CHANNEL(idx, dir, DIR, src, dest)				\
+	.dma_##dir = {								\
+		COND_CODE_1(DT_DMAS_HAS_NAME(idx, dir),				\
+			(XSPI_DMA_CHANNEL_INIT(idx, dir, DIR, src, dest)),	\
+			(NULL))							\
+	},
+
+#define XSPI_DMA_CHANNEL_INIT(idx, dir, dir_cap, src_dev, dest_dev)		\
+	.dev = DEVICE_DT_GET(DT_DMAS_CTLR(idx)),				\
+	.channel = DT_DMAS_CELL_BY_NAME(idx, dir, channel),			\
+	.reg = (DMA_TypeDef *)DT_REG_ADDR(					\
+				   DT_PHANDLE_BY_NAME(idx, dmas, dir)),	\
+	.cfg = {								\
+		.dma_slot = DT_DMAS_CELL_BY_NAME(idx, dir, slot),		\
+		.channel_direction = STM32_DMA_CONFIG_DIRECTION(		\
+					DMA_CHANNEL_CONFIG(idx, dir)),	\
+		.channel_priority = STM32_DMA_CONFIG_PRIORITY(			\
+					DMA_CHANNEL_CONFIG(idx, dir)),		\
+		.dma_callback = xspi_dma_callback,				\
+	},									\
+	.src_addr_increment = STM32_DMA_CONFIG_##src_dev##_ADDR_INC(		\
+				DMA_CHANNEL_CONFIG(idx, dir)),			\
+	.dst_addr_increment = STM32_DMA_CONFIG_##dest_dev##_ADDR_INC(		\
+				DMA_CHANNEL_CONFIG(idx, dir)),
+
+#define STM32_XSPI_USE_DMA(idx, dir, DIR, src, dest)				\
+	COND_CODE_1(DT_NODE_HAS_PROP(idx, dmas),		\
+			(XSPI_DMA_CHANNEL(idx, dir, DIR, src, dest)),	\
+			(EMPTY))
+
+#else
+#define STM32_XSPI_USE_DMA(idx, dir, DIR, src, dest)
+#endif /* STM32_XSPI_INST_USE_DMA */
+
+
 #define STM32_XSPI_USE_RESET(idx)						\
 	COND_CODE_1(DT_INST_NODE_HAS_PROP(idx, reset_gpios),			\
-			(GPIO_DT_SPEC_INST_GET(idx, reset_gpios)),		\
+			(.reset = GPIO_DT_SPEC_INST_GET(idx, reset_gpios)),		\
 			(EMPTY))
 
 #if defined(OCTOSPI_DCR4_REFRESH)
@@ -2057,6 +2224,8 @@ static struct flash_stm32_xspi_data flash_stm32_xspi_dev_data_##idx = {		\
 	.qer_type = DT_QER_PROP_OR(idx, JESD216_DW15_QER_VAL_S1B6),		\
 	.write_opcode = DT_WRITEOC_PROP_OR(idx, SPI_NOR_WRITEOC_NONE),		\
 	.page_size = SPI_NOR_PAGE_SIZE,						\
+	STM32_XSPI_USE_DMA(STM32_XSPI_NODE(idx), tx, TX, MEMORY, PERIPHERAL)	\
+	STM32_XSPI_USE_DMA(STM32_XSPI_NODE(idx), rx, RX, PERIPHERAL, MEMORY)	\
 };										\
 \
 static void flash_stm32_xspi_irq_config_func_##idx(const struct device *dev)	\
