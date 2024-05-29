@@ -388,6 +388,119 @@ static bool qspi_address_is_valid(const struct device *dev, off_t addr,
 }
 
 #ifdef CONFIG_STM32_MEMMAP
+
+
+
+/* Function send a Write Enable and wait it is effective. */
+static int qspi_set_we_memorymap(const struct device *dev)
+{
+	struct flash_stm32_qspi_data *dev_data = dev->data;
+	QSPI_AutoPollingTypeDef we_config;
+	QSPI_CommandTypeDef     we_command = {
+		.Instruction = SPI_NOR_CMD_WREN,
+		.InstructionMode = QSPI_INSTRUCTION_4_LINES,
+		.AddressMode = QSPI_ADDRESS_NONE,
+		.DataMode = QSPI_DATA_NONE,
+		.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE,
+		.DummyCycles  = 0,
+		.DdrMode = QSPI_DDR_MODE_DISABLE,
+		.DdrHoldHalfCycle = QSPI_DDR_HHC_ANALOG_DELAY,
+		.SIOOMode = QSPI_SIOO_INST_EVERY_CMD,
+	};
+
+	/* Enable write operations */
+	if (HAL_QSPI_Command(&dev_data->hqspi, &we_command,
+		HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+	{
+			LOG_ERR("Write Enable Failed to set memory map");
+			return -EIO;
+}
+	/* Configure automatic polling mode to wait for write enabling */
+	we_config.Match           = 0x0202;
+	we_config.Mask            = 0x0202;
+	we_config.MatchMode       = QSPI_MATCH_MODE_AND;
+	we_config.StatusBytesSize = 2;
+	we_config.Interval        = 0x10;
+	we_config.AutomaticStop   = QSPI_AUTOMATIC_STOP_ENABLE;
+
+	we_command.Instruction    = SPI_NOR_CMD_RDSR;
+	we_command.DataMode       = QSPI_DATA_4_LINES;
+	we_command.NbData = 2;
+
+	if (HAL_QSPI_AutoPolling(&dev_data->hqspi, &we_command, &we_config,
+		HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+	{
+			LOG_ERR("Write Enable Failed to set memory map");
+			return -EIO;
+	}
+
+	return 0;
+}
+
+
+
+
+/* This function configure the dummy cycles on memory side.*/
+static int qspi_set_dummycycle(const struct device *dev)
+{
+	HAL_StatusTypeDef hal_ret;
+	struct flash_stm32_qspi_data *dev_data = dev->data;
+	QSPI_CommandTypeDef s_command;
+	uint16_t reg=0;
+
+	/* Initialize the read volatile configuration register command */
+	s_command.InstructionMode   = QSPI_INSTRUCTION_1_LINE;
+	s_command.Instruction       = SPI_NOR_VOL_CFG_RD;
+	s_command.AddressMode       = QSPI_ADDRESS_NONE;
+	s_command.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE;
+	s_command.DataMode          = QSPI_DATA_4_LINES;
+	s_command.DummyCycles       = 8;
+	s_command.NbData            = 2;
+	s_command.DdrMode           = QSPI_DDR_MODE_DISABLE;
+	s_command.DdrHoldHalfCycle  = QSPI_DDR_HHC_ANALOG_DELAY;
+	s_command.SIOOMode          = QSPI_SIOO_INST_EVERY_CMD;
+
+	/* Configure the command */
+	hal_ret = HAL_QSPI_Command(&dev_data->hqspi, &s_command, HAL_QPSI_TIMEOUT_DEFAULT_VALUE);
+	if (hal_ret != HAL_OK) {
+		LOG_ERR("%d: Failed to configure the command", hal_ret);
+		return -EIO;
+	}
+
+	/* Reception of the data */
+	hal_ret = HAL_QSPI_Receive(&dev_data->hqspi, (uint8_t *)(&reg), HAL_QPSI_TIMEOUT_DEFAULT_VALUE);
+	if (hal_ret != HAL_OK) {
+		LOG_ERR("%d: Failed to receive data", hal_ret);
+		return -EIO;
+	}
+
+	/* Enable write operations
+	qspi_set_we_memorymap(dev);
+
+	/* Update volatile configuration register (with new dummy cycles) */
+	s_command.Instruction = SPI_NOR_VOL_CFG_WR;
+	MODIFY_REG(reg, 0xF0F0, ((SPI_NOR_DUMMY_RD << 4) |
+		(SPI_NOR_DUMMY_RD << 12)));
+
+	/* Configure the write volatile configuration register command */
+	hal_ret = HAL_QSPI_Command(&dev_data->hqspi, &s_command, HAL_QPSI_TIMEOUT_DEFAULT_VALUE);
+	if (hal_ret != HAL_OK) {
+		LOG_ERR("%d: Failed to receive data", hal_ret);
+		return -EIO;
+	}
+
+	/* Transmission of the data */
+	hal_ret = HAL_QSPI_Transmit(&dev_data->hqspi, (uint8_t *)(&reg), HAL_QPSI_TIMEOUT_DEFAULT_VALUE);
+	if (hal_ret != HAL_OK) {
+		LOG_ERR("%d: Failed to receive data", hal_ret);
+		return -EIO;
+	}
+
+	return 0;
+}
+
+
+
 /* Must be called inside qspi_lock_thread(). */
 static int stm32_qspi_set_memory_mapped(const struct device *dev)
 {
@@ -396,11 +509,13 @@ static int stm32_qspi_set_memory_mapped(const struct device *dev)
 	struct flash_stm32_qspi_data *dev_data = dev->data;
 
 	QSPI_CommandTypeDef cmd = {
-		.Instruction = SPI_NOR_CMD_READ,
+		.Instruction = SPI_NOR_CMD_QREAD,
 		.Address = 0,
 		.InstructionMode = QSPI_INSTRUCTION_1_LINE,
-		.AddressMode = QSPI_ADDRESS_1_LINE,
+		.AddressMode = QSPI_ADDRESS_4_LINES,
+
 		.DataMode = QSPI_DATA_1_LINE,
+		.DummyCycles = 8,
 	};
 
 	qspi_set_address_size(dev, &cmd);
@@ -410,6 +525,8 @@ static int stm32_qspi_set_memory_mapped(const struct device *dev)
 			return ret;
 		}
 	}
+
+cmd.AddressSize = QSPI_ADDRESS_32_BITS;
 
 	QSPI_MemoryMappedTypeDef mem_mapped = {
 		.TimeOutActivation = QSPI_TIMEOUT_COUNTER_DISABLE,
@@ -1401,9 +1518,15 @@ static int flash_stm32_qspi_init(const struct device *dev)
 	 */
 	dev_data->hqspi.Init.SampleShifting = QSPI_SAMPLE_SHIFTING_HALFCYCLE;
 	dev_data->hqspi.Init.ChipSelectHighTime = QSPI_CS_HIGH_TIME_3_CYCLE;
-	dev_data->hqspi.Init.DualFlash = QSPI_DUALFLASH_DISABLE;
+//	dev_data->hqspi.Init.DualFlash = QSPI_DUALFLASH_DISABLE;
+	dev_data->hqspi.Init.DualFlash = QSPI_DUALFLASH_ENABLE;
 	/* Set Dual Flash Mode only on MemoryMapped */
 	dev_data->hqspi.Init.FlashID = QSPI_FLASH_ID_1;
+
+
+		dev_data->hqspi.Init.FlashSize = 2*(find_lsb_set(dev_cfg->flash_size) - 2);
+
+
 #endif /* dual_flash */
 
 	HAL_QSPI_Init(&dev_data->hqspi);
@@ -1430,7 +1553,7 @@ static int flash_stm32_qspi_init(const struct device *dev)
 	flash_stm32_qspi_send_reset(dev);
 	k_busy_wait(DT_INST_PROP(0, reset_cmd_wait));
 #endif
-
+#if 0
 	/* Run NOR init */
 	const uint8_t decl_nph = 2;
 	union {
@@ -1496,17 +1619,35 @@ static int flash_stm32_qspi_init(const struct device *dev)
 		return -ENODEV;
 	}
 #endif /* CONFIG_FLASH_PAGE_LAYOUT */
-
+#endif
 #ifdef CONFIG_STM32_MEMMAP
+#if 0
 #if DT_PROP(DT_NODELABEL(quadspi), dual_flash) && defined(QUADSPI_CR_DFM)
 	/*
 	 * When the DTS has dual_flash, it means Dual Flash Mode for Memory MAPPED
 	 * Force Dual Flash mode now, after the SFDP sequence which is reading
 	 * one quad-NOR only
 	 */
+
+	/* Then is the flash size twice the size of each quad-spi NOR  */
+dev_data->hqspi.Init.FlashSize = 2 * dev_data->hqspi.Init.FlashSize;
+MODIFY_REG(dev_data->hqspi.Instance->DCR, (QUADSPI_DCR_FSIZE),
+               (dev_data->hqspi.Init.FlashSize << QUADSPI_DCR_FSIZE_Pos));
+
 	MODIFY_REG(dev_data->hqspi.Instance->CR, (QUADSPI_CR_DFM), QSPI_DUALFLASH_ENABLE);
 	LOG_DBG("Dual Flash Mode");
 #endif /* dual_flash */
+#endif
+
+
+ret = qspi_set_dummycycle(dev);
+
+
+	if (ret != 0) {
+		LOG_ERR("Failed to set dummy cycles for memory-mapped mode: %d", ret);
+		return ret;
+	}
+
 
 	ret = stm32_qspi_set_memory_mapped(dev);
 	if (ret != 0) {
@@ -1593,7 +1734,7 @@ static struct flash_stm32_qspi_data flash_stm32_qspi_dev_data = {
 	.hqspi = {
 		.Instance = (QUADSPI_TypeDef *)DT_REG_ADDR(STM32_QSPI_NODE),
 		.Init = {
-			.FifoThreshold = STM32_QSPI_FIFO_THRESHOLD,
+			.FifoThreshold = 1,
 			.SampleShifting = QSPI_SAMPLE_SHIFTING_NONE,
 			.ChipSelectHighTime = QSPI_CS_HIGH_TIME_1_CYCLE,
 			.ClockMode = QSPI_CLOCK_MODE_0,

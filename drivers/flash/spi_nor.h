@@ -60,6 +60,10 @@
 #define SPI_NOR_CMD_PP_1_1_4_4B  0x34  /* Quad Page program (1-1-4) 4 Byte Address */
 #define SPI_NOR_CMD_PP_1_4_4_4B  0x3e  /* Quad Page program (1-4-4) 4 Byte Address */
 
+#define SPI_NOR_VOL_CFG_RD  0x85  /* Read Volatile Config register */
+#define SPI_NOR_VOL_CFG_WR  0x81  /* Write Volatile config register */
+
+
 /* Flash octal opcodes */
 #define SPI_NOR_OCMD_SE         0x21DE  /* Octal Sector erase */
 #define SPI_NOR_OCMD_CE         0xC738  /* Octal Chip erase */
