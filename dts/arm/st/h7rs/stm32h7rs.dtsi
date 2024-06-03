@@ -13,6 +13,7 @@
 #include <zephyr/dt-bindings/reset/stm32h7rs_reset.h>
 #include <zephyr/dt-bindings/adc/stm32h7_adc.h>
 #include <zephyr/dt-bindings/adc/adc.h>
+#include <zephyr/dt-bindings/dma/stm32_dma.h>
 #include <zephyr/dt-bindings/memory-attr/memory-attr.h>
 #include <zephyr/dt-bindings/memory-attr/memory-attr-arm.h>
 #include <freq.h>
@@ -734,6 +735,33 @@
 			reg = <0x40002400 0x400>;
 			interrupts = <119 1>;
 			interrupt-names = "wakeup";
+			status = "disabled";
+		};
+
+		gpdma1: dma@40021000 {
+			compatible = "st,stm32u5-dma";
+			#dma-cells = <3>;
+			reg = <0x40021000 0x1000>;
+			interrupts = <39 0 40 0 41 0 42 0 43 0 44 0 45 0 46 0
+					133 0 134 0 135 0 136 0 137 0 138 0 139 0 140 0>;
+			clocks = <&rcc STM32_CLOCK_BUS_AHB1 0x10>;
+			dma-channels = <16>;
+			dma-requests = <110>;
+			dma-offset = <0>;
+			status = "disabled";
+		};
+
+		hpdma1: dma@52000000 {
+			compatible = "st,stm32u5-dma";
+			#dma-cells = <3>;
+			reg = <0x52000000 0x1000>;
+			interrupts = <64 0 65 0 66 0 67 0 68 0 69 0 70 0 71 0
+					141 0 142 0 143 0 144 0 145 0 146 0 147 0 148 0>;
+			clocks = <&rcc STM32_CLOCK_BUS_AHB5 0x00000001>;
+			st,mem2mem;
+			dma-channels = <16>;
+			dma-offset = <0>;
+			dma-requests = <20>;
 			status = "disabled";
 		};
 
