@@ -12,6 +12,7 @@ supported:
   - uart
   - watchdog
   - entropy
+  - dma
   - adc
   - usb_device
   - usbd
