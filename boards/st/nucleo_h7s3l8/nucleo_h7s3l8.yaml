@@ -13,4 +13,5 @@ supported:
   - entropy
   - dma
   - adc
+  - spi
 vendor: st
