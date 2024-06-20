@@ -1,0 +1,33 @@
+# Copyright (c) 2021, STMicroelectronics
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+    STM32 MSPI Flash controller supporting the JEDEC CFI interface
+
+    Representation of a serial flash on a octospi bus:
+
+        mx25lm51245: ospi-nor-flash@70000000 {
+                compatible = "st,stm32-mspi-nor";
+                reg = <0x70000000 DT_SIZE_M(64)>; /* 512 Mbits */
+                mspi-io-mode = <OSPI_OPI_MODE>; /* access on 8 data lines */
+                mspi-data-rate = <OSPI_DTR_TRANSFER>; /* access in DTR */
+                mspi-max-frequency = <DT_FREQ_M(50)>;
+                status = "okay";
+        };
+
+compatible: "st,stm32-mspi-nor"
+
+include: ["mspi-device.yaml", "flash-controller.yaml", "jedec,jesd216.yaml"]
+
+on-bus: mspi
+
+properties:
+  reg:
+    required: true
+    description: Flash Memory base address and size in bytes
+  reset-gpios:
+    type: phandle-array
+    description: RESETn pin
+  reset-gpios-duration:
+    type: int
+    description: The duration (in ms) for the flash memory reset pulse
