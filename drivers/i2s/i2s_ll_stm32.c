@@ -126,8 +126,15 @@ static int i2s_stm32_enable_clock(const struct device *dev)
 			LOG_ERR("Could not configure I2S domain clock");
 			return -EIO;
 		}
+#if defined(STM32F427xx) || defined(STM32F437xx) || defined(STM32F429xx) || defined(STM32F439xx)
+	/* stm32F4 with RCC PLLI2SCFGR register which does not require a domain clock */
+	} else {
+		/* Set the PLLI2S as the clock source of the I2S */
+		__HAL_RCC_I2S_CONFIG(RCC_I2SCLKSOURCE_PLLI2S);
+		/* Enable PLLI2S afterwards */
+		__HAL_RCC_PLLI2S_ENABLE();
+#endif
 	}
-
 	return 0;
 }
 
@@ -145,7 +152,19 @@ static int i2s_stm32_set_clock(const struct device *dev,
 			LOG_ERR("Failed call clock_control_get_rate(pclken[1])");
 			return -EIO;
 		}
+#if defined(STM32F427xx) || defined(STM32F437xx) || defined(STM32F429xx) || defined(STM32F439xx)
+	/* stm32F4 with RCC PLLI2SCFGR register */
+	} else {
+		/* Check that PLLI2S is on and ready */
+		if (!LL_RCC_PLLI2S_IsReady()) {
+			LOG_ERR("PLL I2S is not ready");
+			return -EIO;
+		}
+		freq_in = HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_I2S);
+#endif
 	}
+	LOG_DBG("i2s freq = %d", freq_in);
+
 	/*
 	 * The ratio between input clock (I2SxClk) and output
 	 * clock on the pad (I2S_CK) is obtained using the
