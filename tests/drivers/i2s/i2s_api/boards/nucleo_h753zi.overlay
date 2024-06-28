@@ -1,0 +1,26 @@
+/* i2s-node0 is the transmitter/receiver */
+
+/ {
+	aliases {
+		i2s-node0 = &i2s2;
+	};
+};
+
+&i2s2 {
+	pinctrl-0 = <&i2s2_ck_pb13 &i2s2_mck_pc6 &i2s2_ws_pb12>;
+	pinctrl-names = "default";
+
+	status = "okay";
+};
+
+&dmamux1 {
+	status = "okay";
+};
+
+&dma1 {
+	status = "okay";
+};
+
+&dma2 {
+	status = "okay";
+};
