@@ -1,0 +1,30 @@
+/* i2s-node0 is the transmitter/receiver */
+
+/ {
+	aliases {
+		i2s-node0 = &i2s3;
+	};
+};
+
+&plli2s {
+	/* PLLI2S sourced by the same clock as the main PLL */
+	clocks = <&clk_hse>;
+	mul-n=<100>;
+	div-r=<2>;
+	status = "okay";
+};
+
+&i2s3 {
+	/* I2S clock source is PLLI2S */
+	pinctrl-0 = <&i2s3_ws_pa4 &i2s3_mck_pc7 &i2s3_ck_pc10 &i2s3_sd_pc12>;
+	pinctrl-names = "default";
+
+	mck-enabled;
+
+	status="okay";
+};
+
+&dma1{
+	status = "okay";
+};
+
