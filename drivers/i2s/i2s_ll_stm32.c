@@ -250,6 +250,7 @@ static int i2s_stm32_configure(const struct device *dev, enum i2s_dir dir,
 		return ret;
 	}
 
+	LL_I2S_Disable(cfg->i2s); /* Disable I2S before writing the I2SCFGR */
 	/* set I2S Master Clock output in the MCK pin, enabled in the DT */
 	if (enable_mck) {
 		LL_I2S_EnableMasterClock(cfg->i2s);
@@ -314,6 +315,8 @@ static int i2s_stm32_configure(const struct device *dev, enum i2s_dir dir,
 		LL_I2S_SetClockPolarity(cfg->i2s, LL_I2S_POLARITY_LOW);
 
 	stream->state = I2S_STATE_READY;
+	LL_I2S_Enable(cfg->i2s); /* Enable I2S after writing the I2SCFGR */
+
 	return 0;
 }
 
@@ -810,6 +813,9 @@ static int i2s_stm32_initialize(const struct device *dev)
 		return -ENODEV;
 	}
 
+	LL_I2S_Disable(cfg->i2s);
+	LL_I2S_EnableMode(cfg->i2s);
+
 	LOG_INF("%s inited", dev->name);
 
 	return 0;
@@ -856,8 +862,8 @@ static int rx_stream_start(struct stream *stream, const struct device *dev)
 	LL_I2S_EnableIT_OVR(cfg->i2s);
 	LL_I2S_EnableIT_UDR(cfg->i2s);
 	LL_I2S_EnableIT_FRE(cfg->i2s);
-	LL_I2S_Enable(cfg->i2s);
-	LL_SPI_StartMasterTransfer(cfg->i2s);
+	LL_I2S_EnableI2S(cfg->i2s);
+	LL_I2S_StartTransfer(cfg->i2s);
 #else
 	LL_I2S_EnableIT_ERR(cfg->i2s);
 	LL_I2S_Enable(cfg->i2s);
@@ -914,8 +920,8 @@ static int tx_stream_start(struct stream *stream, const struct device *dev)
 	LL_I2S_EnableIT_UDR(cfg->i2s);
 	LL_I2S_EnableIT_FRE(cfg->i2s);
 
-	LL_I2S_Enable(cfg->i2s);
-	LL_SPI_StartMasterTransfer(cfg->i2s);
+	LL_I2S_EnableI2S(cfg->i2s);
+	LL_I2S_StartTransfer(cfg->i2s);
 #else
 	LL_I2S_EnableIT_ERR(cfg->i2s);
 	LL_I2S_Enable(cfg->i2s);
@@ -928,6 +934,7 @@ static void rx_stream_disable(struct stream *stream, const struct device *dev)
 {
 	const struct i2s_stm32_cfg *cfg = dev->config;
 
+	LL_SPI_SuspendMasterTransfer(cfg->i2s);
 	LL_I2S_DisableDMAReq_RX(cfg->i2s);
 #if DT_HAS_COMPAT_STATUS_OKAY(st_stm32h7_i2s)
 	LL_I2S_DisableIT_OVR(cfg->i2s);
@@ -952,6 +959,7 @@ static void tx_stream_disable(struct stream *stream, const struct device *dev)
 {
 	const struct i2s_stm32_cfg *cfg = dev->config;
 
+	LL_SPI_SuspendMasterTransfer(cfg->i2s);
 	LL_I2S_DisableDMAReq_TX(cfg->i2s);
 #if DT_HAS_COMPAT_STATUS_OKAY(st_stm32h7_i2s)
 	LL_I2S_DisableIT_OVR(cfg->i2s);
