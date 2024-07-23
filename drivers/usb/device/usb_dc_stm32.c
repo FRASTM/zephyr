@@ -217,14 +217,35 @@ static int usb_dc_stm32_clock_enable(void)
 		return -ENODEV;
 	}
 
-#if defined(PWR_USBSCR_USB33SV) || defined(PWR_SVMCR_USV)
+#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32_otghs) && defined(CONFIG_SOC_SERIES_STM32U5X)
+	/* Sequence to enable the power of the OTG HS on a stm32U5 serie : Enable VDDUSB */
+	if (__HAL_RCC_PWR_IS_CLK_DISABLED()) {
+		__HAL_RCC_PWR_CLK_ENABLE();
+		LL_PWR_EnableVddUSB();
 
+		/* Configure VOSR register of USB HSTranceiverSupply(); */
+		LL_PWR_EnableUSBPowerSupply();
+		LL_PWR_EnableUSBEPODBooster();
+		__HAL_RCC_PWR_CLK_DISABLE();
+	} else {
+		LL_PWR_EnableVddUSB();
+		/* Configure VOSR register of USB HSTranceiverSupply(); */
+		LL_PWR_EnableUSBPowerSupply();
+		LL_PWR_EnableUSBEPODBooster();
+	}
+
+	__HAL_RCC_SYSCFG_CLK_ENABLE();
+	/* Set the OTG PHY reference clock selection */
+	HAL_SYSCFG_SetOTGPHYReferenceClockSelection(SYSCFG_OTG_HS_PHY_CLK_SELECT_1);
+	/* Configuring the SYSCFG registers OTG_HS PHY : OTG_HS PHY enable*/
+	HAL_SYSCFG_EnableOTGPHY(SYSCFG_OTG_HS_PHY_ENABLE);
+#elif defined(PWR_USBSCR_USB33SV) || defined(PWR_SVMCR_USV)
 	/*
 	 * VDDUSB independent USB supply (PWR clock is on)
 	 * with LL_PWR_EnableVDDUSB function (higher case)
 	 */
 	LL_PWR_EnableVDDUSB();
-#endif /* PWR_USBSCR_USB33SV or PWR_SVMCR_USV */
+#endif
 
 	if (DT_INST_NUM_CLOCKS(0) > 1) {
 		if (clock_control_configure(clk, (clock_control_subsys_t)&pclken[1],
@@ -277,6 +298,9 @@ static int usb_dc_stm32_clock_enable(void)
 	 */
 #if defined(CONFIG_SOC_SERIES_STM32H7X)
 	LL_AHB1_GRP1_DisableClockSleep(LL_AHB1_GRP1_PERIPH_USB1OTGHSULPI);
+#elif defined(CONFIG_SOC_SERIES_STM32U5X)
+	LL_AHB2_GRP1_DisableClockStopSleep(LL_AHB2_GRP1_PERIPH_OTG_HS ||
+						LL_AHB2_GRP1_PERIPH_USBPHY);
 #else
 	LL_AHB1_GRP1_DisableClockLowPower(LL_AHB1_GRP1_PERIPH_OTGHSULPI);
 #endif
@@ -297,6 +321,9 @@ static int usb_dc_stm32_clock_disable(void)
 		LOG_ERR("Unable to disable USB clock");
 		return -EIO;
 	}
+#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32_otghs) && defined(CONFIG_SOC_SERIES_STM32U5X)
+	__HAL_RCC_USBPHYC_CLK_DISABLE();
+#endif
 
 	return 0;
 }
