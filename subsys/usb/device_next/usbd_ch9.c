@@ -1101,7 +1101,7 @@ int usbd_handle_ctrl_xfer(struct usbd_context *const uds_ctx,
 
 		/* Remove setup packet buffer from the chain */
 		next_buf = net_buf_frag_del(NULL, buf);
-		if (next_buf == NULL) {
+		if (next_buf == NULL || next_buf->data == NULL) {
 			LOG_ERR("Buffer for data|status is missing");
 			goto ctrl_xfer_stall;
 		}
