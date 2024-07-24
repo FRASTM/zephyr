@@ -28,7 +28,7 @@ LOG_MODULE_REGISTER(cdc_acm_echo, LOG_LEVEL_INF);
 
 const struct device *const uart_dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
 
-#define RING_BUF_SIZE 1024
+#define RING_BUF_SIZE 4096
 uint8_t ring_buffer[RING_BUF_SIZE];
 
 struct ring_buf ringbuf;
@@ -204,7 +204,7 @@ int main(void)
 			break;
 		} else {
 			/* Give CPU resources to low priority threads. */
-			k_sleep(K_MSEC(100));
+			k_sleep(K_MSEC(200));
 		}
 	}
 #endif

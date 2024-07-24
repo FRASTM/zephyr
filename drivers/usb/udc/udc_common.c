@@ -377,7 +377,7 @@ int udc_ep_enable(const struct device *dev,
 		ret = -EPERM;
 		goto ep_enable_error;
 	}
-
+printk("Enable ep 0x%02x\n ", ep);
 	ret = udc_ep_enable_internal(dev, ep, attributes, mps, interval);
 
 ep_enable_error:

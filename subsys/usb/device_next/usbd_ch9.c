@@ -965,6 +965,7 @@ static int handle_setup_request(struct usbd_context *const uds_ctx,
 		break;
 	case USB_REQTYPE_TYPE_CLASS:
 	case USB_REQTYPE_TYPE_VENDOR:
+printk(" USB_REQTYPE_ NON STDR (%d)\n", buf->data);
 		ret = nonstd_request(uds_ctx, buf);
 		break;
 	default:
@@ -1090,6 +1091,9 @@ int usbd_handle_ctrl_xfer(struct usbd_context *const uds_ctx,
 	LOG_INF("Handle control %p ep 0x%02x, len %u, s:%u d:%u s:%u",
 		buf, bi->ep, buf->len, bi->setup, bi->data, bi->status);
 
+if (buf->data == NULL || buf->len == 0) {
+printk(" USB_CONTROL_EP_OUT %p : buf = %p ; len = %d\n", buf, buf->data, buf->len);
+}
 	if (bi->setup && bi->ep == USB_CONTROL_EP_OUT) {
 		struct net_buf *next_buf;
 
@@ -1099,13 +1103,15 @@ int usbd_handle_ctrl_xfer(struct usbd_context *const uds_ctx,
 			goto ctrl_xfer_stall;
 		}
 
+
+
 		/* Remove setup packet buffer from the chain */
 		next_buf = net_buf_frag_del(NULL, buf);
-		if (next_buf == NULL || next_buf->data == NULL) {
+		if (next_buf == NULL) {
+//		if (next_buf == NULL || next_buf->data == NULL) {
 			LOG_ERR("Buffer for data|status is missing");
 			goto ctrl_xfer_stall;
 		}
-
 		/*
 		 * Handle request and data stage, next_buf is either
 		 * data+status or status buffers.

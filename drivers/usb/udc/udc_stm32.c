@@ -440,6 +440,8 @@ static int udc_stm32_ep_mem_config(const struct device *dev,
 	HAL_PCDEx_PMAConfig(&priv->pcd, ep->addr, PCD_SNG_BUF,
 			    priv->occupied_mem);
 
+printk(" HAL_PCDEx_PMAConfig %p : addr = %x ; PMA alloc = %x\n", &priv->pcd, ep->addr, priv->occupied_mem);
+
 	priv->occupied_mem += size;
 
 	return 0;
@@ -531,6 +533,7 @@ static int udc_stm32_enable(const struct device *dev)
 
 	ret = udc_ep_enable_internal(dev, USB_CONTROL_EP_OUT,
 				     USB_EP_TYPE_CONTROL, cfg->ep0_mps, 0);
+printk("Enable econtrol EP out\n");
 	if (ret) {
 		LOG_ERR("Failed enabling ep 0x%02x", USB_CONTROL_EP_OUT);
 		return ret;
@@ -538,6 +541,8 @@ static int udc_stm32_enable(const struct device *dev)
 
 	ret |= udc_ep_enable_internal(dev, USB_CONTROL_EP_IN,
 				      USB_EP_TYPE_CONTROL, cfg->ep0_mps, 0);
+printk("Enable econtrol EP In\n");
+
 	if (ret) {
 		LOG_ERR("Failed enabling ep 0x%02x", USB_CONTROL_EP_IN);
 		return ret;
@@ -663,6 +668,7 @@ static int udc_stm32_ep_enable(const struct device *dev,
 	int ret;
 
 	LOG_DBG("Enable ep 0x%02x", ep->addr);
+printk("Enable ep 0x%02x\n ", ep->addr);
 
 	ret = udc_stm32_ep_mem_config(dev, ep, true);
 	if (ret) {
@@ -1201,6 +1207,8 @@ static int udc_stm32_driver_init0(const struct device *dev)
 		}
 	}
 #endif
+
+LL_PWR_DisableUCPDDeadBattery();
 
 	/*cd
 	 * Required for at least STM32L4 devices as they electrically

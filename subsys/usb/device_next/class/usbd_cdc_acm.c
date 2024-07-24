@@ -435,6 +435,7 @@ static int usbd_cdc_acm_ctd(struct usbd_class_data *const c_data,
 			return 0;
 		}
 
+printk(" SET_LINE_CODING (%d)\n", buf->data);
 		memcpy(&data->line_coding, buf->data, len);
 		cdc_acm_update_uart_cfg(data);
 		usbd_msg_pub_device(uds_ctx, USBD_MSG_CDC_ACM_LINE_CODING, dev);
