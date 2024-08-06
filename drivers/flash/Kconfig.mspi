@@ -28,4 +28,12 @@ config FLASH_MSPI_ATXP032
 	select FLASH_JESD216
 	select MSPI_AMBIQ_AP3 if SOC_SERIES_APOLLO3X
 
+config FLASH_MSPI_STM32
+	bool "MSPI STM32 driver"
+	default y
+	depends on DT_HAS_MSPI_STM32_ENABLED
+	select FLASH_JESD216
+	select FLASH_PAGE_LAYOUT
+	select FLASH_HAS_PAGE_LAYOUT
+
 endmenu
