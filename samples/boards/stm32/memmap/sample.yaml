@@ -1,0 +1,11 @@
+sample:
+  name: Flash MemoryMapped
+tests:
+  sample.drivers.spi.flash:
+    tags:
+      - spi
+      - flash
+    filter: dt_compat_enabled("jedec,spi-nor") or dt_compat_enabled("st,stm32-qspi-nor")
+      or dt_compat_enabled("st,stm32-ospi-nor") or dt_compat_enabled("st,stm32-xspi-nor")
+    harness: console
+    depends_on: spi
