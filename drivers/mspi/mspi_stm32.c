@@ -239,6 +239,7 @@ static int mspi_stm32_access(const struct device *dev,
 	LOG_DBG("MSPI access Instruction 0x%x", cmd.Instruction);
 
 	dev_data->cmd_status = 0;
+stm32_print_command(cmd);
 
 	hal_ret = HAL_XSPI_Command(&dev_data->hmspi, &cmd, HAL_XSPI_TIMEOUT_DEFAULT_VALUE);
 	if (hal_ret != HAL_OK) {
@@ -472,6 +473,7 @@ static int mspi_stm32_mem_ready(const struct device *dev, uint8_t cfg_mode, uint
 	s_config.MatchMode          = HAL_XSPI_MATCH_MODE_AND;
 	s_config.IntervalTime       = SPI_NOR_AUTO_POLLING_INTERVAL;
 	s_config.AutomaticStop      = HAL_XSPI_AUTOMATIC_STOP_ENABLE;
+stm32_print_command(s_command);
 
 	if (HAL_XSPI_Command(&dev_data->hmspi, &s_command,
 		HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
@@ -504,6 +506,7 @@ static int mspi_stm32_write_enable(const struct device *dev, uint8_t cfg_mode, u
 	s_command.AddressMode = HAL_XSPI_ADDRESS_NONE;
 	s_command.DataMode    = HAL_XSPI_DATA_NONE;
 	s_command.DummyCycles = 0U;
+stm32_print_command(s_command);
 
 	if (HAL_XSPI_Command(&dev_data->hmspi, &s_command,
 		HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
@@ -532,7 +535,7 @@ static int mspi_stm32_write_enable(const struct device *dev, uint8_t cfg_mode, u
 	}
 	s_command.DataLength = (cfg_rate == MSPI_DATA_RATE_DUAL) ? 2U : 1U;
 	s_command.Address = 0U;
-
+stm32_print_command(s_command);
 	if (HAL_XSPI_Command(&dev_data->hmspi, &s_command,
 		HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
 		LOG_ERR("MSPI config auto polling cmd failed");
@@ -561,7 +564,7 @@ static int mspi_stm32_write_cfg2reg_dummy(const struct device *dev, uint8_t cfg_
 	s_command.DummyCycles = 0U;
 	s_command.DataLength = (cfg_mode == MSPI_IO_MODE_SINGLE) ? 1U
 			: ((cfg_rate == MSPI_DATA_RATE_DUAL) ? 2U : 1U);
-
+stm32_print_command(s_command);
 	if (HAL_XSPI_Command(&dev_data->hmspi, &s_command,
 		HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
 		LOG_ERR("MSPI transmit cmd");
@@ -591,7 +594,7 @@ static int mspi_stm32_write_cfg2reg_io(const struct device *dev, uint8_t cfg_mod
 	s_command.DummyCycles = 0U;
 	s_command.DataLength = (cfg_mode == MSPI_IO_MODE_SINGLE) ? 1U
 		: ((cfg_rate == MSPI_DATA_RATE_DUAL) ? 2U : 1U);
-
+stm32_print_command(s_command);
 	if (HAL_XSPI_Command(&dev_data->hmspi, &s_command,
 		HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
 		LOG_ERR("Write Flash configuration reg2 failed");
@@ -624,7 +627,7 @@ static int mspi_stm32_read_cfg2reg(const struct device *dev, uint8_t cfg_mode, u
 					? SPI_NOR_DUMMY_REG_OCTAL_DTR
 					: SPI_NOR_DUMMY_REG_OCTAL);
 	s_command.DataLength = (cfg_rate == MSPI_DATA_RATE_DUAL) ? 2U : 1U;
-
+stm32_print_command(s_command);
 	if (HAL_XSPI_Command(&dev_data->hmspi, &s_command, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
 		LOG_ERR("Write Flash configuration reg2 failed");
 		return -EIO;
@@ -1248,7 +1251,7 @@ static int mspi_stm32_memmap_on(const struct device *controller)
 #ifdef XSPI_CCR_SIOO
 	s_command.SIOOMode = HAL_XSPI_SIOO_INST_EVERY_CMD;
 #endif /* XSPI_CCR_SIOO */
-
+stm32_print_command(s_command);
 	ret = HAL_XSPI_Command(&dev_data->hmspi, &s_command, HAL_XSPI_TIMEOUT_DEFAULT_VALUE);
 	if (ret != HAL_OK) {
 		LOG_ERR("Failed to set memory map");
@@ -1268,6 +1271,7 @@ static int mspi_stm32_memmap_on(const struct device *controller)
 		s_command.Instruction = SPI_NOR_OCMD_PAGE_PRG;
 	}
 	s_command.DQSMode = HAL_XSPI_DQS_DISABLE;
+stm32_print_command(s_command);
 	ret = HAL_XSPI_Command(&dev_data->hmspi, &s_command, HAL_XSPI_TIMEOUT_DEFAULT_VALUE);
 	if (ret != HAL_OK) {
 		LOG_ERR("Failed to set memory mapped");

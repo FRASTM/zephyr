@@ -11,7 +11,10 @@
 #include <stdio.h>
 #include <string.h>
 
+
 #define SPI_FLASH_TEST_REGION_OFFSET 0xff000
+//#define SPI_FLASH_TEST_REGION_OFFSET 0x10000
+//#define SPI_FLASH_TEST_REGION_OFFSET 0x0000
 
 #define SPI_FLASH_SECTOR_SIZE        4096
 
@@ -30,7 +33,7 @@ int single_sector_test(const struct device *flash_dev)
 	 * automatically after completion of write and erase
 	 * operations.
 	 */
-	printf("\nTest 1: Flash erase\n");
+	printf("\nTest 1: Flash erase at 0x%x\n", SPI_FLASH_TEST_REGION_OFFSET);
 
 	/* Full flash erase if SPI_FLASH_TEST_REGION_OFFSET = 0 and
 	 * SPI_FLASH_SECTOR_SIZE = flash size
@@ -43,7 +46,7 @@ int single_sector_test(const struct device *flash_dev)
 		printf("Flash erase succeeded!\n");
 	}
 
-	printf("\nTest 2: Flash write\n");
+	printf("\nTest 2: Flash write at 0x%x\n", SPI_FLASH_TEST_REGION_OFFSET);
 
 	printf("Attempting to write %zu bytes\n", len);
 	rc = flash_write(flash_dev, SPI_FLASH_TEST_REGION_OFFSET, expected, len);
@@ -53,6 +56,7 @@ int single_sector_test(const struct device *flash_dev)
 	}
 
 	memset(buf, 0, len);
+	printf("\nTest 3: Flash read at 0x%x\n", SPI_FLASH_TEST_REGION_OFFSET);
 	rc = flash_read(flash_dev, SPI_FLASH_TEST_REGION_OFFSET, buf, len);
 	if (rc != 0) {
 		printf("Flash read failed! %d\n", rc);
@@ -78,6 +82,36 @@ int single_sector_test(const struct device *flash_dev)
 	return rc;
 }
 
+
+int single_sector_read_test(const struct device *flash_dev)
+{
+	const size_t len = 16;
+	uint8_t buf[len];
+	int rc;
+
+	printf("\nPerform test read on single sector at 0x%x\n", SPI_FLASH_TEST_REGION_OFFSET);
+
+	memset(buf, 0, len);
+	rc = flash_read(flash_dev, SPI_FLASH_TEST_REGION_OFFSET, buf, len);
+	if (rc != 0) {
+		printf("Flash read failed! %d\n", rc);
+		return 1;
+	}
+
+	const uint8_t *rp = buf;
+	const uint8_t *rpe = rp + len;
+
+	printf("Data read at is \n");
+	while (rp < rpe) {
+		printf("Read at %08x read %02x\n",
+		       (uint32_t)(SPI_FLASH_TEST_REGION_OFFSET + (rp - buf)),
+			       *rp);
+		++rp;
+	}
+
+	return rc;
+}
+
 #if defined SPI_FLASH_MULTI_SECTOR_TEST
 int multi_sector_test(const struct device *flash_dev)
 {
@@ -86,18 +120,18 @@ int multi_sector_test(const struct device *flash_dev)
 	uint8_t buf[sizeof(expected)];
 	int rc;
 
-	printf("\nPerform test on multiple consequtive sectors");
+	printf("\nPerform test on multiple consecutive sectors");
 
 	/* Write protection needs to be disabled before each write or
 	 * erase, since the flash component turns on write protection
 	 * automatically after completion of write and erase
 	 * operations.
 	 */
-	printf("\nTest 1: Flash erase\n");
+	printf("\nTest 1: Flash erase from 0x%x\n", SPI_FLASH_TEST_REGION_OFFSET);
 
 	/* Full flash erase if SPI_FLASH_TEST_REGION_OFFSET = 0 and
 	 * SPI_FLASH_SECTOR_SIZE = flash size
-	 * Erase 2 sectors for check for erase of consequtive sectors
+	 * Erase 2 sectors for check for erase of consecutive sectors
 	 */
 	rc = flash_erase(flash_dev, SPI_FLASH_TEST_REGION_OFFSET, SPI_FLASH_SECTOR_SIZE * 2);
 	if (rc != 0) {
@@ -123,8 +157,7 @@ int multi_sector_test(const struct device *flash_dev)
 		printf("Flash erase succeeded!\n");
 	}
 
-	printf("\nTest 2: Flash write\n");
-
+	printf("\nTest 2: Flash write from 0x%x\n", SPI_FLASH_TEST_REGION_OFFSET);
 	size_t offs = SPI_FLASH_TEST_REGION_OFFSET;
 
 	while (offs < SPI_FLASH_TEST_REGION_OFFSET + 2 * SPI_FLASH_SECTOR_SIZE) {
@@ -136,6 +169,7 @@ int multi_sector_test(const struct device *flash_dev)
 		}
 
 		memset(buf, 0, len);
+		printf("Attempting to read %zu bytes at offset 0x%x\n", len, offs);
 		rc = flash_read(flash_dev, offs, buf, len);
 		if (rc != 0) {
 			printf("Flash read failed! %d\n", rc);
@@ -175,6 +209,10 @@ int main(void)
 
 	printf("\n%s SPI flash testing\n", flash_dev->name);
 	printf("==========================\n");
+
+	if (single_sector_read_test(flash_dev)) {
+		return 1;
+	}
 
 	if (single_sector_test(flash_dev)) {
 		return 1;

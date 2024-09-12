@@ -133,4 +133,48 @@ struct mspi_stm32_data {
 	int cmd_status;
 };
 
+#if 0
+#define stm32_print_command(z_cmd) \
+printk(" command = { \n \
+.OperationType = 0x%x\n \
+.IOSelect = 0x%x\n \
+.Instruction = 0x%x\n \
+.InstructionMode = 0x%x\n \
+.InstructionWidth = 0x%x\n \
+.InstructionDTRMode = 0x%x\n \
+.Address = 0x%x\n \
+.AddressMode = 0x%x\n \
+.AddressWidth = 0x%x\n \
+.AddressDTRMode = 0x%x\n \
+.AlternateBytes = 0x%x\n \
+.AlternateBytesMode = 0x%x\n \
+.AlternateBytesWidth = 0x%x\n \
+.AlternateBytesDTRMode = 0x%x\n \
+.DataMode = 0x%x\n \
+.DataLength = 0x%x\n \
+.DataDTRMode = 0x%x\n \
+.DummyCycles = 0x%x\n }\n", \
+z_cmd.OperationType,\
+z_cmd.IOSelect,\
+z_cmd.Instruction,\
+z_cmd.InstructionMode,\
+z_cmd.InstructionWidth,\
+z_cmd.InstructionDTRMode,\
+z_cmd.Address,\
+z_cmd.AddressMode,\
+z_cmd.AddressWidth,\
+z_cmd.AddressDTRMode,\
+z_cmd.AlternateBytes,\
+z_cmd.AlternateBytesMode,\
+z_cmd.AlternateBytesWidth,\
+z_cmd.AlternateBytesDTRMode,\
+z_cmd.DataMode,\
+z_cmd.DataLength,\
+z_cmd.DataDTRMode,\
+z_cmd.DummyCycles);
+#else
+//#define stm32_print_command(z_cmd) printk(" command Instruction = 0x%x\n", z_cmd.Instruction);
+#define stm32_print_command(z_cmd)
+#endif
+
 #endif /* ZEPHYR_DRIVERS_MSPI_STM32_H_ */
