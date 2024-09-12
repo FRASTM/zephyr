@@ -48,6 +48,36 @@
 
 const uint8_t erased[] = { 0xff, 0xff, 0xff, 0xff };
 
+
+int single_sector_read_test(const struct device *flash_dev)
+{
+	const size_t len = 16;
+	uint8_t buf[len];
+	int rc;
+
+	printf("\nPerform test read on single sector");
+
+	memset(buf, 0, len);
+	rc = flash_read(flash_dev, 0, buf, len);
+	if (rc != 0) {
+		printf("Flash read failed! %d\n", rc);
+		return 1;
+	}
+
+	const uint8_t *rp = buf;
+	const uint8_t *rpe = rp + len;
+
+	printf("Data read at is \n");
+	while (rp < rpe) {
+		printf("Read at %08x read %02x\n",
+		       (uint32_t)(0 + (rp - buf)),
+			       *rp);
+		++rp;
+	}
+
+	return rc;
+}
+
 void single_sector_test(const struct device *flash_dev)
 {
 	const uint8_t expected[] = { 0x55, 0xaa, 0x66, 0x99 };
@@ -215,6 +245,13 @@ int main(void)
 
 	printf("\n%s SPI flash testing\n", flash_dev->name);
 	printf("==========================\n");
+
+
+
+	if (single_sector_read_test(flash_dev)) {
+		return 1;
+	}
+return 0;
 
 	single_sector_test(flash_dev);
 #if defined SPI_FLASH_MULTI_SECTOR_TEST

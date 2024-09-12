@@ -273,8 +273,8 @@
 		compatible = "st,stm32-xspi-nor";
 		reg = <0x90000000 DT_SIZE_M(64)>; /* 512 Mbits */
 		ospi-max-frequency = <DT_FREQ_M(50)>;
-		spi-bus-width = <XSPI_OCTO_MODE>;
-		data-rate = <XSPI_DTR_TRANSFER>;
+		spi-bus-width = <XSPI_SPI_MODE>;
+		data-rate = <XSPI_STR_TRANSFER>;
 		four-byte-opcodes;
 		status = "okay";
 
