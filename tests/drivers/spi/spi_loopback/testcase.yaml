@@ -75,11 +75,13 @@ tests:
       - nucleo_wb55rg
       - nucleo_l152re
       - nucleo_wl55jc
+      - nucleo_h7s3l8
       - nucleo_h743zi
       - nucleo_h753zi
       - nucleo_h745zi_q/stm32h745xx/m4
       - nucleo_h745zi_q/stm32h745xx/m7
       - stm32h573i_dk
+      - stm32h7s78_dk
     integration_platforms:
       - nucleo_g474re
   drivers.spi.stm32_spi_dma_dt_nocache_mem.loopback:
@@ -89,10 +91,12 @@ tests:
       - EXTRA_CONF_FILE="overlay-stm32-spi-dma-dt-nocache-mem.conf"
     filter: CONFIG_CPU_HAS_DCACHE
     platform_allow:
+      - nucleo_h7s3l8
       - nucleo_h743zi
       - nucleo_h753zi
       - nucleo_h745zi_q/stm32h745xx/m4
       - nucleo_h745zi_q/stm32h745xx/m7
+      - stm32h7s78_dk
     integration_platforms:
       - nucleo_h743zi
   drivers.spi.stm32_spi_16bits_frames_dma.loopback:
@@ -130,6 +134,7 @@ tests:
       - nucleo_g474re
       - nucleo_h743zi
       - nucleo_h753zi
+      - nucleo_h7s3l8
       - nucleo_h745zi_q/stm32h745xx/m4
       - nucleo_h745zi_q/stm32h745xx/m7
       - nucleo_l152re
@@ -137,6 +142,7 @@ tests:
       - nucleo_wl55jc
       - stm32f3_disco
       - stm32h573i_dk
+      - stm32h7s78_dk
     integration_platforms:
       - stm32h573i_dk
   drivers.spi.gd32_spi_interrupt.loopback:

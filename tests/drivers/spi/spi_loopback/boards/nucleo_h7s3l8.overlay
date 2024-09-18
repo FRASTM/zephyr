@@ -1,0 +1,41 @@
+/*
+ * Copyright (c) 2025 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&sram0 {
+		compatible = "zephyr,memory-region", "mmio-sram";
+		zephyr,memory-region = "SRAM0";
+		zephyr,memory-attr = <( DT_MEM_ARM_MPU_RAM_NOCACHE )>;
+};
+
+
+/* SPI1 clock source set to lower freq to pass the test */
+&pll {
+	/delete-property/ div-q;
+	div-q = <8>;
+};
+
+/* spi1 MOSI on D11 spi1 MISO on D12 */
+&spi1 {
+	/* DMA requests 51 & 52 for the spi1 */
+	dmas = <&gpdma1 0 52 STM32_DMA_PERIPH_TX
+		&gpdma1 2 51 STM32_DMA_PERIPH_RX>;
+	dma-names = "tx", "rx";
+
+	slow@0 {
+		compatible = "test-spi-loopback-slow";
+		reg = <0>;
+		spi-max-frequency = <500000>;
+	};
+	fast@0 {
+		compatible = "test-spi-loopback-fast";
+		reg = <0>;
+		spi-max-frequency = <10000000>;
+	};
+};
+
+&gpdma1 {
+	status = "okay";
+};

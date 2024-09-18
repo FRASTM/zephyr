@@ -1,0 +1,50 @@
+/*
+ * Copyright (c) 2025 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&sram0 {
+		compatible = "zephyr,memory-region", "mmio-sram";
+		zephyr,memory-region = "SRAM0";
+		zephyr,memory-attr = <( DT_MEM_ARM_MPU_RAM_NOCACHE )>;
+};
+
+/* SPI4 clock source is set to pll2q for lower input freq */
+&pll2 {
+	div-m = <12>;
+	mul-n = <200>;
+	div-p = <2>;
+	div-q = <8>;
+	div-r = <2>;
+	div-s = <2>;
+	div-t = <2>;
+	clocks = <&clk_hse>;
+	status = "okay";
+};
+
+/* spi4 MOSI on D11 spi4 MISO on D12 */
+&spi4 {
+	clocks = <&rcc STM32_CLOCK(APB2, 13U)>,
+		<&rcc STM32_SRC_PLL2_Q SPI45_SEL(1)>;
+
+	/* DMA requests 57 & 58 for the spi4 */
+	dmas = <&gpdma1 0 58 STM32_DMA_PERIPH_TX
+		&gpdma1 2 57 STM32_DMA_PERIPH_RX>;
+	dma-names = "tx", "rx";
+
+	slow@0 {
+		compatible = "test-spi-loopback-slow";
+		reg = <0>;
+		spi-max-frequency = <500000>;
+	};
+	fast@0 {
+		compatible = "test-spi-loopback-fast";
+		reg = <0>;
+		spi-max-frequency = <10000000>;
+	};
+};
+
+&gpdma1 {
+	status = "okay";
+};
