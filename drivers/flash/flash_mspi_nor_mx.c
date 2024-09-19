@@ -4,6 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/*
+ * **************************************************************************
+ * MSPI flash device driver for Macronix mx25lm51245 (or compatible)
+ * This driver is working with the drivers/mspi/mspi_stm32.c driver
+ * Flash device with compatible = "mspi-nor-mx25" in the DTS NODE
+ * **************************************************************************
+ */
 #define DT_DRV_COMPAT mspi_nor_mx25
 
 #include <zephyr/kernel.h>
@@ -22,8 +29,18 @@ LOG_MODULE_REGISTER(flash_mspi_nor_mx, CONFIG_FLASH_LOG_LEVEL);
 typedef struct mspi_timing_cfg mspi_timing_cfg;
 typedef enum mspi_timing_param mspi_timing_param;
 
-#define NOR_WRITE_SIZE                      1
-#define NOR_ERASE_VALUE                     0xff
+#define NOR_MX_WRITE_SIZE			1
+#define NOR_MX_ERASE_VALUE			0xff
+
+#define NOR_MX_STATUS_MEM_RDY			1
+#define NOR_MX_STATUS_MEM_WREN			2
+#define NOR_MX_STATUS_MEM_ERASED		3
+
+#define NOR_MX_RESET_MAX_TIME			100U
+#define NOR_MX_BULK_ERASE_MAX_TIME		460000U
+#define NOR_MX_SECTOR_ERASE_MAX_TIME		1000U
+#define NOR_MX_SUBSECTOR_4K_ERASE_MAX_TIME	400U
+#define NOR_MX_WRITE_REG_MAX_TIME		40U
 
 enum nor_mx_dummy_clock {
 	NOR_MX_DC_8,
@@ -136,40 +153,12 @@ static int flash_mspi_nor_mx_command_write(const struct device *flash, uint8_t c
 
 	ret = mspi_transceive(cfg->bus, &cfg->dev_id, (const struct mspi_xfer *)&data->trans);
 	if (ret) {
-		LOG_ERR("MSPI write transaction failed with code: %d", ret);
+		LOG_ERR("MSPI Tx transaction failed with code: %d", ret);
 		return -EIO;
 	}
-	return ret;
-}
 
-/* Command to the flash for reading status register  */
-static int flash_mspi_nor_mx_status_read(const struct device *flash, uint8_t cmd, uint8_t *status)
-{
-	const struct flash_mspi_nor_mx_config *cfg = flash->config;
-	struct flash_mspi_nor_mx_data *data = flash->data;
-	int ret;
+	LOG_DBG("MSPI Tx transaction (cmd = 0x%x)", data->packet.cmd);
 
-	data->packet.dir              = MSPI_RX;
-	data->packet.cmd              = cmd;
-	data->packet.address          = 0;
-	data->packet.data_buf         = status;
-	data->packet.num_bytes        = 1;
-
-	data->trans.async             = false; /* meaning : timeout mode */
-	data->trans.xfer_mode         = MSPI_REG;  /* command_read is always in PIO mode */
-	data->trans.rx_dummy          = 0;
-	data->trans.cmd_length        = 1;
-	data->trans.addr_length       = 0;
-	data->trans.hold_ce           = false;
-	data->trans.packets           = &data->packet;
-	data->trans.num_packet        = 1;
-	data->trans.timeout           = 10;
-
-	ret = mspi_transceive(cfg->bus, &cfg->dev_id, (const struct mspi_xfer *)&data->trans);
-	if (ret) {
-		LOG_ERR("MSPI read transaction failed with code: %d", ret);
-		return -EIO;
-	}
 	return ret;
 }
 
@@ -200,9 +189,67 @@ static int flash_mspi_nor_mx_command_read(const struct device *flash, uint8_t cm
 
 	ret = mspi_transceive(cfg->bus, &cfg->dev_id, (const struct mspi_xfer *)&data->trans);
 	if (ret) {
-		LOG_ERR("MSPI read transaction failed with code: %d", ret);
+		LOG_ERR("MSPI Rx transaction failed with code: %d", ret);
 		return -EIO;
 	}
+
+	LOG_DBG("MSPI Rx transaction (cmd = %d)", data->packet.cmd);
+
+	return ret;
+}
+
+/* Command to the flash for reading status register  */
+static int flash_mspi_nor_mx_status_read(const struct device *flash, uint8_t status)
+{
+	const struct flash_mspi_nor_mx_config *cfg = flash->config;
+	struct flash_mspi_nor_mx_data *data = flash->data;
+	int ret;
+	uint8_t status_config[2];/* index 0 for Match, index 1 for MASK */
+
+	data->packet.dir              = MSPI_TX; /* a command to be sent */
+	data->packet.cmd              = SPI_NOR_CMD_RDSR; /* SPI/STR */
+	data->packet.address          = 0;
+
+	data->trans.num_packet        = 1; /* 1 in STR; 2 in DTR */
+	data->trans.async             = true; /* IT mode */
+	data->trans.xfer_mode         = MSPI_REG;  /* command is always in PIO mode */
+	data->trans.tx_dummy          = 0;
+	data->trans.cmd_length        = 1;
+	data->trans.addr_length       = 0;
+	data->trans.hold_ce           = false;
+
+	/* Send the Read status Reg command and the autopolling with matching bit */
+	switch (status) {
+	case NOR_MX_STATUS_MEM_RDY:
+		status_config[0] = SPI_NOR_MEM_RDY_MATCH;
+		status_config[1] = SPI_NOR_MEM_RDY_MASK;
+		data->trans.timeout = HAL_XSPI_TIMEOUT_DEFAULT_VALUE;
+		break;
+	case NOR_MX_STATUS_MEM_ERASED:
+		status_config[0] = SPI_NOR_WEL_MATCH;
+		status_config[1] = SPI_NOR_WEL_MASK;
+		data->trans.timeout = NOR_MX_BULK_ERASE_MAX_TIME;
+		break;
+	case NOR_MX_STATUS_MEM_WREN:
+		status_config[0] = SPI_NOR_WREN_MATCH;
+		status_config[1] = SPI_NOR_WREN_MASK;
+		data->trans.timeout = HAL_XSPI_TIMEOUT_DEFAULT_VALUE;
+		break;
+	default:
+		LOG_ERR("Flash MSPI read status %d not supported", status);
+		return -EIO;
+	}
+	data->packet.data_buf         = status_config;
+	data->packet.num_bytes        = sizeof(status_config);
+
+	ret = mspi_transceive(cfg->bus, &cfg->dev_id, (const struct mspi_xfer *)&data->trans);
+	if (ret) {
+		LOG_ERR("Flash MSPI read transaction failed with code: %d", ret);
+		return -EIO;
+	}
+
+	LOG_DBG("Flash MSPI status transaction (mode = %d)", data->trans.xfer_mode);
+
 	return ret;
 }
 
@@ -236,6 +283,7 @@ static void release(const struct device *flash)
 	k_sem_give(&data->lock);
 }
 
+/* Enables writing to the memory sending a Write Enable and wait it is effective */
 static int flash_mspi_nor_mx_write_enable(const struct device *flash)
 {
 	int ret;
@@ -244,8 +292,11 @@ static int flash_mspi_nor_mx_write_enable(const struct device *flash)
 
 	/* Initialize the write enable command */
 	ret = flash_mspi_nor_mx_command_write(flash, SPI_NOR_CMD_WREN, 0, 4, 0, NULL, 0);
-
-	/* Wait for auto-polling bit */
+	if (ret) {
+		return ret;
+	}
+	/* Followed by the polling on bit WREN */
+	ret = flash_mspi_nor_mx_status_read(flash, NOR_MX_STATUS_MEM_WREN);
 
 	return ret;
 }
@@ -257,7 +308,7 @@ static int flash_mspi_nor_mx_write_disable(const struct device *flash)
 	LOG_DBG("Disabling write");
 	ret = flash_mspi_nor_mx_command_write(flash, SPI_NOR_CMD_WRDI, 0, 4, 0, NULL, 0);
 
-// 	return ret;
+	return ret;
 }
 
 static int flash_mspi_nor_mx_reset(const struct device *flash)
@@ -331,6 +382,21 @@ static int flash_mspi_nor_mx_erase_sector(const struct device *flash, off_t addr
 	return ret;
 }
 
+static int flash_mspi_nor_mx_erased(const struct device *flash)
+{
+	int ret;
+
+	LOG_DBG("Wait for mem erased");
+
+	/* Wait polling the WEL (write enable latch) bit to become to 0
+	 * When the Chip Erase Cycle is completed, the Write Enable Latch (WEL) bit is cleared.
+	 * in cfg_mode SPI/OPI and cfg_rate transfer STR/DTR
+	 */
+	ret = flash_mspi_nor_mx_status_read(flash, NOR_MX_STATUS_MEM_ERASED);
+
+	return ret;
+}
+
 static int flash_mspi_nor_mx_erase_block(const struct device *flash, off_t addr)
 {
 	int ret;
@@ -384,6 +450,7 @@ static int flash_mspi_nor_mx_page_program(const struct device *flash, off_t offs
 		LOG_ERR("MSPI write transaction failed with code: %d", ret);
 		return -EIO;
 	}
+
 	return ret;
 }
 
@@ -397,41 +464,20 @@ static int flash_mspi_nor_mx_mem_ready(const struct device *flash)
 	const struct flash_mspi_nor_mx_config *cfg = flash->config;
 	struct flash_mspi_nor_mx_data *data = flash->data;
 	mspi_timing_cfg bkp = data->timing_cfg;
-
-	uint32_t status = 0;
-	uint32_t rx_dummy;
-	uint32_t instruction;
 	int ret;
 
-	if (data->dev_cfg.io_mode == MSPI_IO_MODE_SINGLE) {
-		rx_dummy = 0;
-		instruction = SPI_NOR_CMD_RDSR;
-	} else {
-		rx_dummy = SPI_NOR_DUMMY_REG_OCTAL;
-		instruction = SPI_NOR_OCMD_RDSR;
-//		TIMING_CFG_SET_RX_DUMMY(&data->timing_cfg, 4);
-		if (mspi_timing_config(cfg->bus, &cfg->dev_id, cfg->timing_cfg_mask,
-				       (void *)&data->timing_cfg)) {
-			LOG_ERR("Failed to config mspi controller");;
-			return -EIO;
-		}
+	LOG_DBG("Reading status register");
+	ret = flash_mspi_nor_mx_status_read(flash, NOR_MX_STATUS_MEM_RDY);
+	if (ret) {
+		LOG_ERR("Could not read status");
+		return ret;
 	}
-
-//	do {
-		LOG_DBG("Reading status register");
-		ret = flash_mspi_nor_mx_status_read(flash, instruction,	(uint8_t *)&status);
-		if (ret) {
-			LOG_ERR("Could not read status");
-			return ret;
-		}
-//	} while (status & SPI_NOR_WIP_BIT);
-
 
 	if (data->dev_cfg.io_mode != MSPI_IO_MODE_SINGLE) {
 		data->timing_cfg = bkp;
 		if (mspi_timing_config(cfg->bus, &cfg->dev_id, cfg->timing_cfg_mask,
 				       (void *)&data->timing_cfg)) {
-			LOG_ERR("Failed to config mspi controller");;
+			LOG_ERR("Failed to config mspi controller");
 			return -EIO;
 		}
 	}
@@ -458,7 +504,7 @@ static int flash_mspi_nor_mx_read(const struct device *flash, off_t offset, void
 		return -EINVAL;
 	}
 
-	LOG_DBG("Flash : read %d Bytes at x%08zx", size, offset);
+	LOG_DBG("Flash : read %d Bytes at 0x%lx", size, (long)offset);
 	acquire(flash);
 
 	/* During the MemoryMapped, read with a memcopy */
@@ -469,7 +515,7 @@ static int flash_mspi_nor_mx_read(const struct device *flash, off_t offset, void
 
 		memcpy(rdata, (void *)mmap_addr, size);
 
-		LOG_DBG("Read %d bytes from 0x%08zx", size, (ssize_t)offset);
+		LOG_DBG("Read %d bytes from 0x%lx", size, (long)offset);
 		goto read_end;
 	}
 
@@ -526,7 +572,7 @@ static int flash_mspi_nor_mx_write(const struct device *flash, off_t offset, con
 		return -EINVAL;
 	}
 
-	LOG_DBG("Flash : write %d Bytes at x%08zx", size, offset);
+	LOG_DBG("Flash : write %d Bytes at 0x%lx", size, (long)offset);
 
 	acquire(flash);
 
@@ -539,6 +585,12 @@ static int flash_mspi_nor_mx_write(const struct device *flash, off_t offset, con
 		}
 		data->xip_cfg = cfg->tar_xip_cfg;
 		/* And continue */
+	}
+
+	/* First check that flash is ready for erasing */
+	ret = flash_mspi_nor_mx_mem_ready(flash);
+	if (ret) {
+		goto write_end;
 	}
 
 	while (size) {
@@ -558,7 +610,7 @@ static int flash_mspi_nor_mx_write(const struct device *flash, off_t offset, con
 			goto write_end;
 		}
 
-		ret = flash_mspi_nor_mx_mem_ready(flash);
+		ret = flash_mspi_nor_mx_status_read(flash, NOR_MX_STATUS_MEM_RDY);
 		if (ret) {
 			goto write_end;
 		}
@@ -633,6 +685,12 @@ static int flash_mspi_nor_mx_erase(const struct device *flash, off_t offset, siz
 		/* And continue */
 	}
 
+	/* First check that flash is ready for erasing */
+	ret = flash_mspi_nor_mx_mem_ready(flash);
+	if (ret) {
+		goto erase_end;
+	}
+
 	if ((offset == 0) && (size == cfg->mem_size)) {
 		ret = flash_mspi_nor_mx_write_enable(flash);
 		if (ret) {
@@ -643,30 +701,28 @@ static int flash_mspi_nor_mx_erase(const struct device *flash, off_t offset, siz
 		if (ret) {
 			goto erase_end;
 		}
-
-		ret = flash_mspi_nor_mx_mem_ready(flash);
+		/* Chip (Bulk) erase started, wait until WEL becomes 0 */
+		ret = flash_mspi_nor_mx_erased(flash);
 		if (ret) {
 			goto erase_end;
 		}
 
 	} else if ((0 == (offset % SPI_NOR_BLOCK_SIZE)) && (0 == (size % SPI_NOR_BLOCK_SIZE))) {
 		for (i = 0; i < num_blocks; i++) {
+			/* Check if write enable on each sector or for the whole device */
 			ret = flash_mspi_nor_mx_write_enable(flash);
 			if (ret) {
 				goto erase_end;
 			}
-
 			ret = flash_mspi_nor_mx_unprotect_sector(flash, offset);
-
-			LOG_DBG("Flash : erase block %d", 1 + (offset % SPI_NOR_BLOCK_SIZE));
-
+			if (ret) {
+				goto erase_end;
+			}
 			ret = flash_mspi_nor_mx_write_enable(flash);
 			if (ret) {
 				goto erase_end;
 			}
-
 			ret = flash_mspi_nor_mx_erase_block(flash, offset);
-
 			if (ret) {
 				goto erase_end;
 			}
@@ -680,21 +736,20 @@ static int flash_mspi_nor_mx_erase(const struct device *flash, off_t offset, siz
 		}
 	} else {
 		for (i = 0; i < num_sectors; i++) {
-/*			ret = flash_mspi_nor_mx_unprotect_sector(flash, offset);
-			if (ret) {
-				goto erase_end;
-			}*/
+			/* Check if write enable on each sector or for the whole device */
 			ret = flash_mspi_nor_mx_write_enable(flash);
 			if (ret) {
 				goto erase_end;
 			}
-
-			ret = flash_mspi_nor_mx_mem_ready(flash);
+			ret = flash_mspi_nor_mx_unprotect_sector(flash, offset);
 			if (ret) {
 				goto erase_end;
 			}
-
-			LOG_DBG("Flash : erase sector %d", 1 + (offset % SPI_NOR_SECTOR_SIZE));
+			/* Check if write enable on each sector or for the whole device */
+			ret = flash_mspi_nor_mx_write_enable(flash);
+			if (ret) {
+				goto erase_end;
+			}
 
 			ret = flash_mspi_nor_mx_erase_sector(flash, offset);
 			if (ret) {
@@ -740,7 +795,6 @@ static int flash_mspi_nor_mx_init(const struct device *flash)
 	const struct flash_mspi_nor_mx_config *cfg = flash->config;
 	struct flash_mspi_nor_mx_data *data = flash->data;
 	uint8_t vendor_id;
-	uint32_t CRB3;
 
 	if (!device_is_ready(cfg->bus)) {
 		LOG_ERR("Controller device is not ready");
@@ -798,11 +852,13 @@ static int flash_mspi_nor_mx_init(const struct device *flash)
 	/*
 	 * We should check here that the mem is ready,
 	 * configure it according to the io-mode/data-rate
-	 */
+	 * MSPI_DEVICE_CONFIG_ALL will overwrite the previous config of the MSPI
+	 * SKIP it for NOW
 	if (mspi_dev_config(cfg->bus, &cfg->dev_id, MSPI_DEVICE_CONFIG_ALL, &cfg->tar_dev_cfg)) {
 		LOG_ERR("Failed to config mspi controller");;
 		return -EIO;
-	}
+	}*/
+
 	LOG_DBG("Flash config'd");
 #if 0
 	if (flash_mspi_nor_mx_write_enable(flash)) {
@@ -840,8 +896,7 @@ static int flash_mspi_nor_mx_init(const struct device *flash)
 	}*/
 	LOG_DBG("Flash ready");
 
-	/* XIP will need the base address for MemoryMapped mode */
-
+	/* XIP will need the base address and size for MemoryMapped mode */
 	if (cfg->tar_xip_cfg.enable) {
 		if (mspi_xip_config(cfg->bus, &cfg->dev_id, &cfg->tar_xip_cfg)) {
 			LOG_ERR("Failed to enable XIP");;
@@ -951,6 +1006,10 @@ static const struct flash_driver_api flash_mspi_nor_mx_api = {
 #endif
 };
 
+
+/* TODO: we use the serial_cfg.mem_boundary to give the NOR flash size to the MSPI controller
+ * Other possible is to pass size throught the XIP mspi_xip_cfg structure
+ */
 #define MSPI_DEVICE_CONFIG_SERIAL(n)                                                              \
 	{                                                                                         \
 		.ce_num             = DT_INST_PROP(n, mspi_hardware_ce_num),                      \
@@ -976,8 +1035,8 @@ static const struct flash_mspi_nor_mx_config flash_mspi_nor_mx_cfg = {
 		.mem_size = DT_INST_PROP(0, size), /* in Bytes */
 		.flash_param =
 			{
-				.write_block_size = NOR_WRITE_SIZE,
-				.erase_value = NOR_ERASE_VALUE,
+				.write_block_size = NOR_MX_WRITE_SIZE,
+				.erase_value = NOR_MX_ERASE_VALUE,
 			},
 		.page_layout =
 			{
@@ -992,9 +1051,9 @@ static const struct flash_mspi_nor_mx_config flash_mspi_nor_mx_cfg = {
 		.tar_scramble_cfg   = MSPI_SCRAMBLE_CONFIG_DT_INST(0),
 		.sw_multi_periph    = DT_PROP(DT_INST_BUS(0), software_multiperipheral)
 	};
+
 static struct flash_mspi_nor_mx_data flash_mspi_nor_mx_dev_data = {
 		.lock = Z_SEM_INITIALIZER(flash_mspi_nor_mx_dev_data.lock, 0, 1),
-		.jedec_id = DT_INST_PROP_OR(0, jedec_id, 0),
 	};
 
 DEVICE_DT_INST_DEFINE(0,
