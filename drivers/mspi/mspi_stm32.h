@@ -21,15 +21,10 @@
 
 #define MSPI_STM32_FIFO_THRESHOLD 4U
 
-#define MSPI_MAX_FREQ        250000000
-#define MSPI_MAX_DEVICE      2
-#define MSPI_TIMEOUT_US      1000000
-#define STM32_MSPI_INST_ID    0
-
-#define MSPI_MAX_FREQ        250000000
-#define MSPI_MAX_DEVICE      2
-#define MSPI_TIMEOUT_US      1000000
-#define STM32_MSPI_INST_ID    0
+#define MSPI_MAX_FREQ      250000000
+#define MSPI_MAX_DEVICE    2
+#define MSPI_TIMEOUT_US    1000000
+#define STM32_MSPI_INST_ID 0
 
 /* Valid range is [0, 255] */
 #define MSPI_STM32_CLOCK_PRESCALER_MIN                0U
@@ -45,49 +40,54 @@
 #define MSPI_STM32_MAX_FREQ                    48000000
 #define MSPI_MAX_DEVICE                        2
 /* used as default value for DTS writeoc */
-#define HAL_XSPI_WRITEOC_NONE                  0xFF
+#define MSPI_STM32_WRITEOC_NONE                  0xFF
 
-#define HAL_XSPI_CMD_WRSR         0x01 /* Write status register */
-#define HAL_XSPI_CMD_RDSR         0x05 /* Read status register */
-#define HAL_XSPI_CMD_READ         0x03 /* Read data */
-#define HAL_XSPI_CMD_READ_FAST    0x0B /* Read data */
-#define HAL_XSPI_CMD_PP           0x02 /* Page program */
-#define HAL_XSPI_CMD_READ_4B      0x13 /* Read data 4 Byte Address */
-#define HAL_XSPI_CMD_READ_FAST_4B 0x0C /* Fast Read 4 Byte Address */
-#define HAL_XSPI_CMD_PP_4B        0x12 /* Page Program 4 Byte Address */
+#define MSPI_STM32_CMD_WRSR         0x01 /* Write status register */
+#define MSPI_STM32_CMD_RDSR         0x05 /* Read status register */
+#define MSPI_STM32_CMD_READ         0x03 /* Read data */
+#define MSPI_STM32_CMD_READ_FAST    0x0B /* Read data */
+#define MSPI_STM32_CMD_PP           0x02 /* Page program */
+#define MSPI_STM32_CMD_READ_4B      0x13 /* Read data 4 Byte Address */
+#define MSPI_STM32_CMD_READ_FAST_4B 0x0C /* Fast Read 4 Byte Address */
+#define MSPI_STM32_CMD_PP_4B        0x12 /* Page Program 4 Byte Address */
+#define MSPI_STM32_CMD_WREN         0x06 /* Write enable */
+#define MSPI_STM32_CMD_RDPD         0xAB /* Release from Deep Power Down */
+#define MSPI_STM32_CMD_RD_CFGREG2       0x71    /* Read config register 2 */
+#define MSPI_STM32_CMD_WR_CFGREG2   0x72 /* Write config register 2 */
 
-#define HAL_XSPI_OCMD_RDSR     0x05FA /* Octal Read status register */
-#define HAL_XSPI_OCMD_RD       0xEC13 /* Octal IO read command */
-#define HAL_XSPI_OCMD_PAGE_PRG 0x12ED /* Octal Page Prog */
-#define HAL_XSPI_OCMD_WREN     0x06F9 /* Octal Write enable */
+#define MSPI_STM32_OCMD_RDSR       0x05FA /* Octal Read status register */
+#define MSPI_STM32_OCMD_RD         0xEC13 /* Octal IO read command */
+#define MSPI_STM32_OCMD_PAGE_PRG   0x12ED /* Octal Page Prog */
+#define MSPI_STM32_OCMD_WREN       0x06F9 /* Octal Write enable */
+#define MSPI_STM32_OCMD_DTR_RD     0xEE11 /* Octal IO DTR read command */
+#define MSPI_STM32_OCMD_WR_CFGREG2 0x728D /* Octal Write configuration Register2 */
+#define MSPI_STM32_OCMD_RD_CFGREG2 0x718E /* Octal Read configuration Register2 */
 
-#define HAL_XSPI_CMD_RDPD       0xAB /* Release from Deep Power Down */
-#define HAL_XSPI_CMD_WR_CFGREG2 0x72 /* Write config register 2 */
 
 /* Flash Auto-polling values */
-#define HAL_XSPI_WREN_MATCH 0x02
-#define HAL_XSPI_WREN_MASK  0x02
+#define MSPI_STM32_WREN_MATCH 0x02
+#define MSPI_STM32_WREN_MASK  0x02
 
-#define HAL_XSPI_WEL_MATCH 0x00
-#define HAL_XSPI_WEL_MASK  0x02
+#define MSPI_STM32_WEL_MATCH 0x00
+#define MSPI_STM32_WEL_MASK  0x02
 
-#define HAL_XSPI_MEM_RDY_MATCH 0x00
-#define HAL_XSPI_MEM_RDY_MASK  0x01
+#define MSPI_STM32_MEM_RDY_MATCH 0x00
+#define MSPI_STM32_MEM_RDY_MASK  0x01
 
-#define HAL_XSPI_AUTO_POLLING_INTERVAL 0x10
+#define MSPI_STM32_AUTO_POLLING_INTERVAL 0x10
 /* Flash Dummy Cycles values */
-#define HAL_XSPI_DUMMY_RD              8U
-#define HAL_XSPI_DUMMY_RD_OCTAL        6U
-#define HAL_XSPI_DUMMY_RD_OCTAL_DTR    6U
-#define HAL_XSPI_DUMMY_REG_OCTAL       4U
-#define HAL_XSPI_DUMMY_REG_OCTAL_DTR   5U
+#define MSPI_STM32_DUMMY_RD              8U
+#define MSPI_STM32_DUMMY_RD_OCTAL        6U
+#define MSPI_STM32_DUMMY_RD_OCTAL_DTR    6U
+#define MSPI_STM32_DUMMY_REG_OCTAL       4U
+#define MSPI_STM32_DUMMY_REG_OCTAL_DTR   5U
 
 /* Memory registers address */
-#define HAL_XSPI_REG2_ADDR1             0x0000000
-#define HAL_XSPI_CR2_STR_OPI_EN         0x01
-#define HAL_XSPI_CR2_DTR_OPI_EN         0x02
-#define HAL_XSPI_REG2_ADDR3             0x00000300
-#define HAL_XSPI_CR2_DUMMY_CYCLES_66MHZ 0x07
+#define MSPI_STM32_REG2_ADDR1             0x0000000
+#define MSPI_STM32_CR2_STR_OPI_EN         0x01
+#define MSPI_STM32_CR2_DTR_OPI_EN         0x02
+#define MSPI_STM32_REG2_ADDR3             0x00000300
+#define MSPI_STM32_CR2_DUMMY_CYCLES_66MHZ 0x07
 
 #if MSPI_STM32_USE_DMA
 /* Lookup table to set dma priority from the DTS */
@@ -161,8 +161,6 @@ struct mspi_stm32_data {
 
 	/* controller access mutex */
 	struct k_mutex lock;
-
-	struct k_sem sem;
 	struct k_sem sync;
 
 	struct mspi_dev_cfg dev_cfg;
