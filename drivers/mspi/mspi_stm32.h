@@ -118,8 +118,6 @@ struct mspi_stm32_data {
 
 	/* controller access mutex */
 	struct k_mutex lock;
-
-	struct k_sem sem;
 	struct k_sem sync;
 
 	struct mspi_dev_cfg dev_cfg;
