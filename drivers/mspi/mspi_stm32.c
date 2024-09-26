@@ -647,38 +647,48 @@ static int mspi_stm32_config_mem(const struct device *dev, uint8_t cfg_mode, uin
 	/* MSPI_IO_MODE_SINGLE/MSPI_DATA_RATE_SINGLE is already done */
 	if ((cfg_mode == MSPI_IO_MODE_SINGLE)
 			&& (cfg_rate == MSPI_DATA_RATE_SINGLE)) {
-		LOG_INF("XSPI flash config is SPI / STR");
+		LOG_DBG("MSPI flash config is SPI / STR");
 		return 0;
 	}
 
 	/* The following sequence is given by the ospi/xspi stm32 driver */
 
+	if (mspi_stm32_write_enable(dev,
+		MSPI_IO_MODE_SINGLE, MSPI_DATA_RATE_SINGLE) != 0) {
+		LOG_ERR("MSPI write Enable failed");
+		return -EIO;
+	}
+	LOG_DBG("MSPI in write Enable");
 	/* Write Configuration register 2 (with new dummy cycles) */
 	if (mspi_stm32_write_cfg2reg_dummy(dev,
 		MSPI_IO_MODE_SINGLE, MSPI_DATA_RATE_SINGLE) != 0) {
-		LOG_ERR("XSPI write CFGR2 failed");
+		LOG_ERR("MSPI write CFGR2 failed");
 		return -EIO;
 	}
+	LOG_DBG("MSPI in write CFGR dummy");
 	if (mspi_stm32_mem_ready(dev,
 		MSPI_IO_MODE_SINGLE, MSPI_DATA_RATE_SINGLE) != 0) {
 		LOG_ERR("XSPI autopolling failed");
 		return -EIO;
 	}
+	LOG_DBG("MSPI mem is ready");
 	if (mspi_stm32_write_enable(dev,
 		MSPI_IO_MODE_SINGLE, MSPI_DATA_RATE_SINGLE) != 0) {
-		LOG_ERR("XSPI write Enable 2 failed");
+		LOG_ERR("MSPI write Enable 2 failed");
 		return -EIO;
 	}
+	LOG_DBG("MSPI in Write Enable (2nd)");
 
 	/* Write Configuration register 2 (with Octal I/O SPI protocol : choose STR or DTR) */
-	uint8_t mode_enable = ((cfg_mode == MSPI_DATA_RATE_SINGLE)
+	uint8_t mode_enable = ((cfg_mode == MSPI_DATA_RATE_DUAL)
 				? SPI_NOR_CR2_DTR_OPI_EN
 				: SPI_NOR_CR2_STR_OPI_EN);
 	if (mspi_stm32_write_cfg2reg_io(dev,
 		MSPI_IO_MODE_SINGLE, MSPI_DATA_RATE_SINGLE, mode_enable) != 0) {
-		LOG_ERR("XSPI write CFGR2 failed");
+		LOG_ERR("MSPI write CFGR2 failed");
 		return -EIO;
 	}
+	LOG_DBG("MSPI write conf reg. 2");
 
 	/* Wait that the configuration is effective and check that memory is ready */
 	k_busy_wait(MSPI_STM32_WRITE_REG_MAX_TIME * USEC_PER_MSEC);
@@ -687,37 +697,39 @@ static int mspi_stm32_config_mem(const struct device *dev, uint8_t cfg_mode, uin
 	dev_data->hmspi.Init.MemoryType            = HAL_XSPI_MEMTYPE_MACRONIX;
 	dev_data->hmspi.Init.DelayHoldQuarterCycle = HAL_XSPI_DHQC_ENABLE;
 	if (HAL_XSPI_Init(&dev_data->hmspi) != HAL_OK) {
-		LOG_ERR("XSPI mem type MACRONIX failed");
+		LOG_ERR("MSPI mem type MACRONIX failed");
 		return -EIO;
 	}
+	LOG_DBG("MSPI update memory Type");
 
 	if (cfg_rate == MSPI_DATA_RATE_SINGLE) {
 		if (mspi_stm32_mem_ready(dev,
 			MSPI_IO_MODE_OCTAL, MSPI_DATA_RATE_SINGLE) != 0) {
 			/* Check Flash busy ? */
-			LOG_ERR("XSPI flash busy failed");
+			LOG_ERR("MSPI flash busy failed");
 			return -EIO;
 		}
+		LOG_DBG("MSPI mem is ready");
 
 		if (mspi_stm32_read_cfg2reg(dev,
 			MSPI_IO_MODE_OCTAL, MSPI_DATA_RATE_SINGLE, reg) != 0) {
 			/* Check the configuration has been correctly done on SPI_NOR_REG2_ADDR1 */
-			LOG_ERR("XSPI flash config read failed");
+			LOG_ERR("MSPI flash config read failed");
 			return -EIO;
 		}
 
-		LOG_INF("XSPI flash config is OCTO / STR");
+		LOG_INF("MSPI flash config is OCTO / STR");
 	}
 
 	if (cfg_rate == MSPI_DATA_RATE_DUAL) {
 		if (mspi_stm32_mem_ready(dev,
 			MSPI_IO_MODE_OCTAL, MSPI_DATA_RATE_DUAL) != 0) {
 			/* Check Flash busy ? */
-			LOG_ERR("XSPI flash busy failed");
+			LOG_ERR("MSPI flash busy failed");
 			return -EIO;
 		}
 
-		LOG_INF("XSPI flash config is OCTO / DTR");
+		LOG_INF("MSPI flash config is OCTO / DTR");
 	}
 
 	return 0;
