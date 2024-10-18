@@ -19,6 +19,7 @@ tests:
       - native_sim
       - apollo3p_evb
       - apollo510_evb
+      - stm32h573i_dk
   drivers.mspi.flash.xip_read:
     tags:
       - drivers
@@ -30,5 +31,6 @@ tests:
       - apollo510_evb
     integration_platforms:
       - apollo510_evb
+      - stm32h573i_dk
     extra_configs:
       - CONFIG_FLASH_MSPI_XIP_READ=y
