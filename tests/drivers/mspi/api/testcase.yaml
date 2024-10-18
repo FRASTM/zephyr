@@ -8,10 +8,12 @@ tests:
       - mspi
       - api
     filter: dt_compat_enabled("zephyr,mspi-emul-controller") or
-            dt_compat_enabled("ambiq,mspi-controller")
+            dt_compat_enabled("ambiq,mspi-controller") or
+            dt_compat_enabled(""st,stm32-mspi-controller")
     harness: ztest
     platform_allow:
       - native_sim
       - apollo3p_evb
+      - stm32h573i_dk
     integration_platforms:
       - native_sim

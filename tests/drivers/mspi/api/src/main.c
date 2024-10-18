@@ -18,6 +18,9 @@ typedef enum mspi_timing_param mspi_timing_param;
 #include "mspi_ambiq.h"
 typedef struct mspi_ambiq_timing_cfg mspi_timing_cfg;
 typedef enum mspi_ambiq_timing_param mspi_timing_param;
+#elif defined(CONFIG_SOC_FAMILY_STM32)
+typedef struct mspi_timing_cfg mspi_timing_cfg;
+typedef enum mspi_timing_param mspi_timing_param;
 #endif
 
 #define MSPI_BUS_NODE       DT_ALIAS(mspi0)
