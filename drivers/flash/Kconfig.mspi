@@ -61,6 +61,15 @@ config FLASH_MSPI_NOR_LAYOUT_PAGE_SIZE
 
 endif # FLASH_MSPI_NOR
 
+config FLASH_MSPI_NOR_MX
+	bool "MSPI NOR MX driver"
+	default y
+	depends on DT_HAS_JEDEC_MSPI_NOR_MX25_ENABLED
+	select FLASH_MSPI
+	select FLASH_JESD216
+	select FLASH_PAGE_LAYOUT
+	select FLASH_HAS_PAGE_LAYOUT
+
 endmenu
 
 if FLASH_MSPI
