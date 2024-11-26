@@ -114,7 +114,16 @@ void config_plli2s(void)
 				       plli2sm(STM32_PLLI2S_M_DIVISOR),
 				       STM32_PLLI2S_N_MULTIPLIER,
 				       plli2sr(STM32_PLLI2S_R_DIVISOR));
+#if STM32_PLLI2S_Q_ENABLED
+	/* There is a Q divider on the PLLI2S to configure the PLL48CK */
+	LL_RCC_PLLI2S_ConfigDomain_48M(get_pll_source(),
+				       plli2sm(STM32_PLLI2S_M_DIVISOR),
+				       STM32_PLLI2S_N_MULTIPLIER,
+				       plli2sq(STM32_PLLI2S_Q_DIVISOR));
+#endif /* STM32_PLLI2S_Q_ENABLED */
 #endif
+
+
 }
 
 #endif /* STM32_PLLI2S_ENABLED */
