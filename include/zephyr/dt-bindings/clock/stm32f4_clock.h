@@ -32,11 +32,12 @@
 #define STM32_SRC_PLL_P		(STM32_SRC_LSI + 1)
 #define STM32_SRC_PLL_Q		(STM32_SRC_PLL_P + 1)
 #define STM32_SRC_PLL_R		(STM32_SRC_PLL_Q + 1)
-/** I2S sources */
-#define STM32_SRC_PLLI2S_R	(STM32_SRC_PLL_R + 1)
+/** I2S sources (no PLLI2S_P divider) */
+#define STM32_SRC_PLLI2S_Q	(STM32_SRC_PLL_R + 1)
+#define STM32_SRC_PLLI2S_R	(STM32_SRC_PLLI2S_Q + 1)
+
 /* I2S_CKIN not supported yet */
 /* #define STM32_SRC_I2S_CKIN	TBD */
-
 
 #define STM32_CLOCK_REG_MASK    0xFFU
 #define STM32_CLOCK_REG_SHIFT   0U
@@ -78,6 +79,7 @@
 #define MCO1_PRE(val)           STM32_MCO_CFGR(val, 0x7, 24, CFGR_REG)
 #define MCO2_SEL(val)           STM32_MCO_CFGR(val, 0x3, 30, CFGR_REG)
 #define MCO2_PRE(val)           STM32_MCO_CFGR(val, 0x7, 27, CFGR_REG)
+
 /** BDCR devices */
 #define RTC_SEL(val)		STM32_DOMAIN_CLOCK(val, 3, 8, BDCR_REG)
 
