@@ -1,0 +1,20 @@
+/*
+ * Copyright (c) 2024 STMicroelectronics
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	aliases {
+		mspi0 = &mspi1;
+	};
+};
+
+&mspi1 {
+
+	mspi_device: mspi_device@0 {
+		status = "okay";
+		compatible = "zephyr,mspi-emul-device";
+		reg = <0x0>;
+		mspi-max-frequency = <48000000>;
+	};
+};
