@@ -18,6 +18,8 @@ typedef enum mspi_timing_param mspi_timing_param;
 #include "mspi_ambiq.h"
 typedef struct mspi_ambiq_timing_cfg mspi_timing_cfg;
 typedef enum mspi_ambiq_timing_param mspi_timing_param;
+#elif defined(CONFIG_SOC_FAMILY_STM32)
+#include "mspi_stm32.h"
 #endif
 
 #define MSPI_BUS_NODE       DT_ALIAS(mspi0)
@@ -40,7 +42,7 @@ struct mspi_cfg hardware_cfg = {
 	.max_freq                 = DT_PROP(MSPI_BUS_NODE, clock_frequency),
 	.re_init                  = true,
 };
-#endif
+#endif /* TEST_MSPI_REINIT */
 
 
 static struct mspi_dev_id dev_id[] = {
@@ -51,13 +53,17 @@ static struct mspi_dev_cfg device_cfg[] = {
 	DT_FOREACH_CHILD_STATUS_OKAY_SEP(MSPI_BUS_NODE, MSPI_DEVICE_CONFIG_DT, (,))
 };
 
+#if CONFIG_MSPI_XIP
 static struct mspi_xip_cfg xip_cfg[] = {
 	DT_FOREACH_CHILD_STATUS_OKAY_SEP(MSPI_BUS_NODE, MSPI_XIP_CONFIG_DT, (,))
 };
+#endif /* CONFIG_MSPI_XIP */
 
+#if CONFIG_MSPI_SCRAMBLE
 static struct mspi_scramble_cfg scramble_cfg[] = {
 	DT_FOREACH_CHILD_STATUS_OKAY_SEP(MSPI_BUS_NODE, MSPI_SCRAMBLE_CONFIG_DT, (,))
 };
+#endif /* CONFIG_MSPI_SCRAMBLE */
 
 ZTEST(mspi_api, test_mspi_api)
 {
@@ -74,7 +80,7 @@ ZTEST(mspi_api, test_mspi_api)
 
 	ret = mspi_config(&spec);
 	zassert_equal(ret, 0, "mspi_config failed.");
-#endif
+#endif //* TEST_MSPI_REINIT */
 
 	for (int dev_idx = 0; dev_idx < ARRAY_SIZE(mspi_devices); ++dev_idx) {
 
@@ -87,12 +93,12 @@ ZTEST(mspi_api, test_mspi_api)
 #if CONFIG_MSPI_XIP
 		ret = mspi_xip_config(mspi_bus, &dev_id[dev_idx], &xip_cfg[dev_idx]);
 		zassert_equal(ret, 0, "mspi_xip_config failed.");
-#endif
+#endif /* CONFIG_MSPI_XIP */
 
 #if CONFIG_MSPI_SCRAMBLE
 		ret = mspi_scramble_config(mspi_bus, &dev_id[dev_idx], &scramble_cfg[dev_idx]);
 		zassert_equal(ret, 0, "mspi_scramble_config failed.");
-#endif
+#endif /* CONFIG_MSPI_SCRAMBLE */
 
 #if CONFIG_MSPI_TIMING
 		mspi_timing_cfg timing_cfg;
@@ -100,7 +106,7 @@ ZTEST(mspi_api, test_mspi_api)
 
 		ret = mspi_timing_config(mspi_bus, &dev_id[dev_idx], timing_cfg_mask, &timing_cfg);
 		zassert_equal(ret, 0, "mspi_timing_config failed.");
-#endif
+#endif /* CONFIG_MSPI_TIMING */
 
 		ret = mspi_register_callback(mspi_bus, &dev_id[dev_idx],
 					     MSPI_BUS_XFER_COMPLETE, NULL, NULL);
