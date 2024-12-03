@@ -373,16 +373,16 @@ static int mspi_stm32_status_reg(const struct device *controller, const struct m
 	cmd.InstructionMode = HAL_XSPI_INSTRUCTION_1_LINE;
 	cmd.Address = ctx->xfer.packets->address;
 
-	LOG_DBG("MSPI poll status reg.");
-
 	XSPI_AutoPollingTypeDef s_config;
 	/* Set the match to check if the bit is Reset */
-	s_config.MatchValue = *ctx_autopoll->match;
- 	s_config.MatchMask = *ctx_autopoll->mask;
+	s_config.MatchValue = ctx_autopoll->match;
+	s_config.MatchMask = ctx_autopoll->mask;
 
 	s_config.MatchMode = HAL_XSPI_MATCH_MODE_AND;
 	s_config.IntervalTime = MSPI_STM32_AUTO_POLLING_INTERVAL;
 	s_config.AutomaticStop = HAL_XSPI_AUTOMATIC_STOP_ENABLE;
+
+	LOG_DBG("MSPI poll status reg (Match = %d / Mask =%d)", s_config.MatchValue, s_config.MatchMask);
 
 	if (HAL_XSPI_Command(&dev_data->hmspi, &cmd, HAL_XSPI_TIMEOUT_DEFAULT_VALUE)) {
 		LOG_ERR("%d: Failed to send XSPI instruction", ret);
@@ -395,14 +395,14 @@ static int mspi_stm32_status_reg(const struct device *controller, const struct m
 		goto status_err;
 	}
 
-	/* Lock again with the expected timeout value = ctx->xfer.timeout */
-	if (k_sem_take(&dev_data->sync, K_MSEC(ctx->xfer.timeout))) {
+	/* Lock again with the expected timeout value = ctx_autopoll.num_polls */
+	if (k_sem_take(&dev_data->sync, K_MSEC(ctx_autopoll->num_polls))) {
 		LOG_ERR("XSPI AutoPoll wait failed");
 		HAL_XSPI_Abort(&dev_data->hmspi);
 		k_sem_reset(&dev_data->sync);
 		goto status_err;
 	}
-	/* Context is locked with the given timeout : Now expecting IRQ */
+	/* Context is locked with the given timeout : Now wait for IRQ */
 	return 0;
 
 status_err:
