@@ -23,6 +23,7 @@
 #include <zephyr/drivers/flash.h>
 #include "spi_nor.h"
 #include "jesd216.h"
+#include "mspi_stm32.h"
 
 LOG_MODULE_REGISTER(flash_mspi_nor_mx, CONFIG_FLASH_LOG_LEVEL);
 
@@ -53,6 +54,16 @@ enum nor_mx_dummy_clock {
 	NOR_MX_DC_22,
 };
 
+/* Structure to autopoll the match/mask config when reading the flash status reg */
+struct flash_mspi_nor_mx_autopoll {
+	struct mspi_stm32_autopoll_cfg cfg;
+	uint8_t match_ap;
+	uint8_t mask_ap;
+	struct mspi_callback_context ctx_ap;
+	struct k_poll_signal sig_ap;
+	struct k_poll_event evt_ap;
+};
+
 struct flash_mspi_nor_mx_config {
 	uint32_t port;
 	uint32_t mem_size; /* in Bytes */
@@ -79,7 +90,7 @@ struct flash_mspi_nor_mx_data {
 	mspi_timing_cfg timing_cfg;
 	struct mspi_xfer trans;
 	struct mspi_xfer_packet packet;
-
+	struct flash_mspi_nor_mx_autopoll autopoll;
 	struct k_sem lock;
 	uint8_t jedec_id[JESD216_READ_ID_LEN];
 };
@@ -164,49 +175,52 @@ static int flash_mspi_nor_mx_command_read(const struct device *flash, uint8_t cm
 	return ret;
 }
 
+/* CB function to notify the flash device status register */
+void autopoll_cb(struct mspi_callback_context *mspi_cb_ctx, uint32_t status)
+{
+	/* dereferencing the pointer as flash_mspi_nor_mx_autopoll instead */
+	struct flash_mspi_nor_mx_autopoll *autopoll = mspi_cb_ctx->ctx;
+	struct mspi_event *evt = &mspi_cb_ctx->mspi_evt;
+
+	if (evt->evt_type == MSPI_BUS_XFER_AUTOPOLL) {
+		k_poll_signal_raise(&autopoll->sig_ap, evt->evt_data.status);
+	}
+}
+
 /* Command to the flash for reading status register  */
-static int flash_mspi_nor_mx_status_read(const struct device *flash, uint8_t status)
+static int flash_mspi_nor_mx_busy_wait(const struct device *flash)
 {
 	const struct flash_mspi_nor_mx_config *cfg = flash->config;
 	struct flash_mspi_nor_mx_data *data = flash->data;
+	uint32_t status = 0;
 	int ret;
-	uint8_t status_config[2]; /* index 0 for Match, index 1 for MASK */
 
 	data->packet.dir = MSPI_TX;          /* a command to be sent */
 	data->packet.cmd = SPI_NOR_CMD_RDSR; /* SPI/STR */
 	data->packet.address = 0;
+	data->packet.data_buf = (uint8_t *)&status;
+	data->packet.num_bytes = sizeof(uint32_t);
+	data->packet.cb_mask = MSPI_BUS_XFER_AUTOPOLL_CB;
 
 	data->trans.num_packet = 1;       /* 1 in STR; 2 in DTR */
+	data->trans.packets = &data->packet;
 	data->trans.async = true;         /* IT mode */
 	data->trans.xfer_mode = MSPI_PIO; /* command is always in PIO mode */
-	data->trans.tx_dummy = 0;
+	data->trans.tx_dummy = data->dev_cfg.tx_dummy;;
 	data->trans.cmd_length = 1;
 	data->trans.addr_length = 0;
 	data->trans.hold_ce = false;
 
-	/* Send the Read status Reg command and the autopolling with matching bit */
-	switch (status) {
-	case NOR_MX_STATUS_MEM_RDY:
-		status_config[0] = SPI_NOR_MEM_RDY_MATCH;
-		status_config[1] = SPI_NOR_MEM_RDY_MASK;
-		data->trans.timeout = HAL_XSPI_TIMEOUT_DEFAULT_VALUE;
-		break;
-	case NOR_MX_STATUS_MEM_ERASED:
-		status_config[0] = SPI_NOR_WEL_MATCH;
-		status_config[1] = SPI_NOR_WEL_MASK;
-		data->trans.timeout = NOR_MX_BULK_ERASE_MAX_TIME;
-		break;
-	case NOR_MX_STATUS_MEM_WREN:
-		status_config[0] = SPI_NOR_WREN_MATCH;
-		status_config[1] = SPI_NOR_WREN_MASK;
-		data->trans.timeout = HAL_XSPI_TIMEOUT_DEFAULT_VALUE;
-		break;
-	default:
-		LOG_ERR("Flash MSPI read status %d not supported", status);
+	/* Give the autopolling with matching bit through the callback function */
+	data->autopoll.ctx_ap.ctx = &data->autopoll.cfg;
+
+	ret = mspi_register_callback(cfg->bus, &cfg->dev_id, MSPI_BUS_XFER_AUTOPOLL,
+				     (mspi_callback_handler_t)autopoll_cb,
+				     &data->autopoll.ctx_ap);
+	if (ret) {
+		LOG_ERR("MSPI register callback failed (%d)", ret);
 		return -EIO;
 	}
-	data->packet.data_buf = status_config;
-	data->packet.num_bytes = sizeof(status_config);
 
 	ret = mspi_transceive(cfg->bus, &cfg->dev_id, (const struct mspi_xfer *)&data->trans);
 	if (ret) {
@@ -214,9 +228,7 @@ static int flash_mspi_nor_mx_status_read(const struct device *flash, uint8_t sta
 		return -EIO;
 	}
 
-	LOG_DBG("Flash MSPI status transaction (mode = %d)", data->trans.xfer_mode);
-
-	return ret;
+	return 0;
 }
 
 static void acquire(const struct device *flash)
@@ -250,6 +262,7 @@ static void release(const struct device *flash)
 /* Enables writing to the memory sending a Write Enable and wait it is effective */
 static int flash_mspi_nor_mx_write_enable(const struct device *flash)
 {
+	struct flash_mspi_nor_mx_data *data = flash->data;
 	int ret;
 
 	LOG_DBG("Enabling write");
@@ -259,8 +272,13 @@ static int flash_mspi_nor_mx_write_enable(const struct device *flash)
 	if (ret) {
 		return ret;
 	}
+
 	/* Followed by the polling on bit WREN */
-	ret = flash_mspi_nor_mx_status_read(flash, NOR_MX_STATUS_MEM_WREN);
+	data->autopoll.cfg.match = SPI_NOR_WREN_MATCH;
+	data->autopoll.cfg.mask = SPI_NOR_WREN_MASK;
+	data->autopoll.cfg.num_polls = HAL_XSPI_TIMEOUT_DEFAULT_VALUE;
+
+	ret = flash_mspi_nor_mx_busy_wait(flash);
 
 	return ret;
 }
@@ -346,6 +364,7 @@ static int flash_mspi_nor_mx_erase_sector(const struct device *flash, off_t addr
 
 static int flash_mspi_nor_mx_erased(const struct device *flash)
 {
+	struct flash_mspi_nor_mx_data *data = flash->data;
 	int ret;
 
 	LOG_DBG("Wait for mem erased");
@@ -354,7 +373,11 @@ static int flash_mspi_nor_mx_erased(const struct device *flash)
 	 * When the Chip Erase Cycle is completed, the Write Enable Latch (WEL) bit is cleared.
 	 * in cfg_mode SPI/OPI and cfg_rate transfer STR/DTR
 	 */
-	ret = flash_mspi_nor_mx_status_read(flash, NOR_MX_STATUS_MEM_ERASED);
+	data->autopoll.match_ap = SPI_NOR_WEL_MATCH;
+	data->autopoll.mask_ap = SPI_NOR_WEL_MASK;
+	data->trans.timeout = NOR_MX_BULK_ERASE_MAX_TIME;
+
+	ret = flash_mspi_nor_mx_busy_wait(flash);
 
 	return ret;
 }
@@ -429,7 +452,13 @@ static int flash_mspi_nor_mx_mem_ready(const struct device *flash)
 	int ret;
 
 	LOG_DBG("Reading status register");
-	ret = flash_mspi_nor_mx_status_read(flash, NOR_MX_STATUS_MEM_RDY);
+
+	/* Followed by the polling on bit RDY */
+	data->autopoll.cfg.match = SPI_NOR_MEM_RDY_MATCH;
+	data->autopoll.cfg.mask = SPI_NOR_MEM_RDY_MASK;
+	data->autopoll.cfg.num_polls = HAL_XSPI_TIMEOUT_DEFAULT_VALUE;
+
+	ret = flash_mspi_nor_mx_busy_wait(flash);
 	if (ret) {
 		LOG_ERR("Could not read status");
 		return ret;
@@ -574,9 +603,15 @@ static int flash_mspi_nor_mx_write(const struct device *flash, off_t offset, con
 			goto write_end;
 		}
 
-		ret = flash_mspi_nor_mx_status_read(flash, NOR_MX_STATUS_MEM_RDY);
+		/* Poll  on bit RDY */
+		data->autopoll.cfg.match = SPI_NOR_MEM_RDY_MATCH;
+		data->autopoll.cfg.mask = SPI_NOR_MEM_RDY_MASK;
+		data->autopoll.cfg.num_polls = HAL_XSPI_TIMEOUT_DEFAULT_VALUE;
+
+		ret = flash_mspi_nor_mx_busy_wait(flash);
 		if (ret) {
-			goto write_end;
+			LOG_ERR("Could not read status");
+			return ret;
 		}
 
 		src += i;
@@ -986,6 +1021,12 @@ static const struct flash_mspi_nor_mx_config flash_mspi_nor_mx_cfg = {
 
 static struct flash_mspi_nor_mx_data flash_mspi_nor_mx_dev_data = {
 	.lock = Z_SEM_INITIALIZER(flash_mspi_nor_mx_dev_data.lock, 0, 1),
+	.autopoll = {
+		.sig_ap = K_POLL_SIGNAL_INITIALIZER(flash_mspi_nor_mx_dev_data.autopoll.sig_ap),
+		.evt_ap = K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SIGNAL,
+					K_POLL_MODE_NOTIFY_ONLY,
+					&(flash_mspi_nor_mx_dev_data).autopoll.sig_ap),
+			},
 };
 
 DEVICE_DT_INST_DEFINE(0, flash_mspi_nor_mx_init, PM_DEVICE_DT_INST_GET(0),

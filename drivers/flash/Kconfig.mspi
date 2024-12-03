@@ -69,6 +69,7 @@ config FLASH_MSPI_NOR_MX
 	select FLASH_JESD216
 	select FLASH_PAGE_LAYOUT
 	select FLASH_HAS_PAGE_LAYOUT
+	select POLL
 
 endmenu
 
