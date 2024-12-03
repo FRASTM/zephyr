@@ -340,7 +340,7 @@ static int mspi_stm32_status_reg(const struct device *controller, const struct m
 {
 	struct mspi_stm32_data *dev_data = controller->data;
 	struct mspi_context *ctx = &dev_data->ctx;
-
+	struct mspi_stm32_autopoll_cfg *ctx_autopoll = cb_ctx->ctx;
 	int ret = 0;
 	int cfg_flag = 0;
 
@@ -376,10 +376,9 @@ static int mspi_stm32_status_reg(const struct device *controller, const struct m
 	LOG_DBG("MSPI poll status reg.");
 
 	XSPI_AutoPollingTypeDef s_config;
-
 	/* Set the match to check if the bit is Reset */
-	s_config.MatchValue = ctx->xfer.packets->data_buf[0];
-	s_config.MatchMask = ctx->xfer.packets->data_buf[1];
+	s_config.MatchValue = *ctx_autopoll->match;
+ 	s_config.MatchMask = *ctx_autopoll->mask;
 
 	s_config.MatchMode = HAL_XSPI_MATCH_MODE_AND;
 	s_config.IntervalTime = MSPI_STM32_AUTO_POLLING_INTERVAL;
@@ -685,6 +684,38 @@ static void mspi_stm32_isr(const struct device *dev)
 	struct mspi_stm32_data *dev_data = dev->data;
 
 	HAL_XSPI_IRQHandler(&dev_data->hmspi);
+}
+
+static void mspi_autopoll_callback(void *pCallbackCtxt, uint32_t status)
+{
+	const struct device *controller = pCallbackCtxt;
+	struct mspi_stm32_data *data = controller->data;
+	struct mspi_context *ctx = &data->ctx;
+	struct mspi_event *evt = &ctx->callback_ctx->mspi_evt;
+	struct mspi_stm32_autopoll_cfg *autopoll = ctx->callback_ctx->ctx;
+	uint8_t *buff;
+	bool matched;
+
+	ctx->packets_done++;
+
+	evt->evt_data.controller = controller;
+	evt->evt_data.dev_id = ctx->owner;
+	evt->evt_data.status = status;
+
+	buff = evt->evt_data.packet->data_buf;
+	matched = true;
+	for (int i = 0; i < autopoll->size; i++) {
+		if ((buff[autopoll->offset + i] & autopoll->mask[i]) != autopoll->match[i]) {
+			matched = false;
+			break;
+		}
+	}
+	if (matched) {
+		ctx->callback(ctx->callback_ctx);
+	} else if (ctx->packets_done > autopoll->num_polls) {
+		evt->evt_data.status |= 0xDEAD0000;
+		ctx->callback(ctx->callback_ctx);
+	}
 }
 
 #if !defined(CONFIG_SOC_SERIES_STM32H7X)
@@ -1346,7 +1377,8 @@ static int mspi_stm32_register_callback(const struct device *controller,
 		return -ESTALE;
 	}
 
-	if (evt_type >= MSPI_BUS_EVENT_MAX) {
+	/* event  type MSPI_BUS_XFER_AUTOPOLL is accepted */
+	if (evt_type > MSPI_BUS_EVENT_MAX) {
 		LOG_ERR("callback types %d not supported.", evt_type);
 		return -ENOTSUP;
 	}
@@ -1577,13 +1609,13 @@ static int mspi_stm32_transceive(const struct device *controller, const struct m
 	/*
 	 * async + MSPI_PIO : Use callback on Irq if PIO
 	 * sync + MSPI_PIO use timeout (mainly for NOR command and param
-	 * MSPI_DMA : async/sync is meaningless with DMA (no DMA IT function)t
+	 * MSPI_DMA : async/sync is meaningless with DMA (no DMA IT function)
 	 */
 	if ((xfer->xfer_mode == MSPI_PIO) && ((xfer->packets->cmd == MSPI_STM32_OCMD_RDSR) ||
 					      (xfer->packets->cmd == MSPI_STM32_CMD_RDSR))) {
 		/* This is a command and an autopolling on the status register */
 		cb = (mspi_callback_handler_t)HAL_XSPI_StatusMatchCallback;
-		cb_ctx = dev_data->cb_ctxs[MSPI_BUS_XFER_COMPLETE];
+		cb_ctx = dev_data->cb_ctxs[MSPI_BUS_XFER_AUTOPOLL];
 		return mspi_stm32_status_reg(controller, xfer, cb, cb_ctx);
 	}
 	if (xfer->xfer_mode == MSPI_PIO) {
@@ -1597,7 +1629,7 @@ static int mspi_stm32_transceive(const struct device *controller, const struct m
 		}
 		return mspi_stm32_pio_transceive(controller, xfer, cb, cb_ctx);
 	} else if (xfer->xfer_mode == MSPI_DMA) {
-		/*  Do not care about xfer->async */
+		/* Do not care about xfer->async */
 		return mspi_stm32_dma_transceive(controller, xfer, cb, cb_ctx);
 	} else {
 		return -EIO;

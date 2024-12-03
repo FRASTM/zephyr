@@ -79,6 +79,12 @@
 #define MSPI_STM32_MEM_RDY_MASK  0x01
 
 #define MSPI_STM32_AUTO_POLLING_INTERVAL 0x10
+
+#define MSPI_BUS_XFER_AUTOPOLL MSPI_BUS_EVENT_MAX
+#define MSPI_BUS_EVENT_MAX_STM32 (MSPI_BUS_EVENT_MAX + 1)
+
+#define MSPI_BUS_XFER_AUTOPOLL_CB (MSPI_BUS_XFER_COMPLETE_CB << 1)
+
 /* Flash Dummy Cycles values */
 #define MSPI_STM32_DUMMY_RD              8U
 #define MSPI_STM32_DUMMY_RD_OCTAL        6U
@@ -128,6 +134,15 @@ enum mspi_access_mode {
 	MSPI_ACCESS_DMA = 3
 };
 
+struct mspi_stm32_autopoll_cfg {
+	uint32_t magic; /* magic word 0xDEADBEEF */
+	uint32_t offset; /* offset in bytes */
+	uint32_t size; /* the number of bytes to match */
+	uint8_t *match; /* match value */
+	uint8_t *mask; /* value mask */
+	uint32_t num_polls; /* maximum number of polls */
+};
+
 struct mspi_context {
 	const struct mspi_dev_id *owner;
 
@@ -173,8 +188,8 @@ struct mspi_stm32_data {
 	/* Timing configurations */
 	struct mspi_timing_cfg timing_cfg;
 
-	mspi_callback_handler_t cbs[MSPI_BUS_EVENT_MAX];
-	struct mspi_callback_context *cb_ctxs[MSPI_BUS_EVENT_MAX];
+	mspi_callback_handler_t cbs[MSPI_BUS_EVENT_MAX_STM32];
+	struct mspi_callback_context *cb_ctxs[MSPI_BUS_EVENT_MAX_STM32];
 
 	struct mspi_context ctx;
 	int cmd_status;
