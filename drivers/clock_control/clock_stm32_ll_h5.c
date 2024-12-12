@@ -123,6 +123,7 @@ int enabled_clock(uint32_t src_clk)
 	    (src_clk == STM32_SRC_PCLK1) ||
 	    (src_clk == STM32_SRC_PCLK2) ||
 	    (src_clk == STM32_SRC_PCLK3) ||
+	    ((src_clk == STM32_SRC_CKPER) && IS_ENABLED(STM32_CKPER_ENABLED)) ||
 	    ((src_clk == STM32_SRC_HSE) && IS_ENABLED(STM32_HSE_ENABLED)) ||
 	    ((src_clk == STM32_SRC_HSI) && IS_ENABLED(STM32_HSI_ENABLED)) ||
 	    ((src_clk == STM32_SRC_HSI48) && IS_ENABLED(STM32_HSI48_ENABLED)) ||
@@ -276,6 +277,11 @@ static int stm32_clock_control_get_subsys_rate(const struct device *dev,
 #if defined(STM32_HSI48_ENABLED)
 	case STM32_SRC_HSI48:
 		*rate = STM32_HSI48_FREQ;
+		break;
+#endif /* STM32_HSI48_ENABLED */
+#if defined(STM32_CKPER_ENABLED)
+	case STM32_SRC_CKPER:
+		*rate = LL_RCC_GetCLKPClockSource(LL_RCC_CLKP_CLKSOURCE);
 		break;
 #endif /* STM32_HSI48_ENABLED */
 #if defined(STM32_PLL_ENABLED)
