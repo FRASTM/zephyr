@@ -1,0 +1,111 @@
+/*
+ * Copyright (c) 2021 Linaro Limited
+ * Copyright (c) 2024 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * Warning: This overlay clears clocks back to a state equivalent to what could
+ * be found in stm32h5.dtsi
+ */
+
+&clk_hse {
+	status = "disabled";
+	/delete-property/ hse-bypass;
+	/delete-property/ clock-frequency;
+};
+
+&clk_hsi {
+	status = "disabled";
+	/delete-property/ hsi-div;
+};
+
+&clk_csi {
+	status = "disabled";
+};
+
+&clk_lse {
+	status = "disabled";
+};
+
+&clk_lsi {
+	status = "disabled";
+};
+
+&pll {
+	/delete-property/ div-m;
+	/delete-property/ mul-n;
+	/delete-property/ div-p;
+	/delete-property/ div-q;
+	/delete-property/ div-r;
+	/delete-property/ clocks;
+	status = "disabled";
+};
+
+&pll2 {
+	/delete-property/ div-m;
+	/delete-property/ mul-n;
+	/delete-property/ div-p;
+	/delete-property/ div-q;
+	/delete-property/ div-r;
+	/delete-property/ clocks;
+	status = "disabled";
+};
+
+&pll3 {
+	/delete-property/ div-m;
+	/delete-property/ mul-n;
+	/delete-property/ div-p;
+	/delete-property/ div-q;
+	/delete-property/ div-r;
+	/delete-property/ clocks;
+	status = "disabled";
+};
+
+&rcc {
+	/delete-property/ clocks;
+	/delete-property/ clock-frequency;
+	/delete-property/ d1cpre;
+	/delete-property/ hpre;
+	/delete-property/ d1ppre;
+	/delete-property/ d2ppre1;
+	/delete-property/ d2ppre2;
+	/delete-property/ d3ppre;
+};
+
+&spi2 {
+	pinctrl-0 = <&spi2_nss_pa3 &spi2_sck_pi1
+		     &spi2_miso_pi2 &spi2_mosi_pb15>;
+	pinctrl-names = "default";
+	/delete-property/ clocks;
+	status = "disabled";
+};
+
+/* Core set up
+ * Aim of this part is to provide a base working clock config
+ */
+
+&clk_hsi {
+	hsi-div = <1>;	/* HSI RC: 64MHz, hsi_clk = 64MHz */
+	status = "okay";
+};
+
+&pll {
+	div-m = <4>;
+	mul-n = <30>;
+	div-p = <2>;
+	div-q = <2>;
+	div-r = <2>;
+	clocks = <&clk_hsi>;
+	status = "okay";
+};
+
+&rcc {
+	clocks = <&pll>;
+	clock-frequency = <DT_FREQ_M(240)>;
+	ahb-prescaler = <1>;
+	apb1-prescaler = <1>;
+	apb2-prescaler = <1>;
+	apb3-prescaler = <1>;
+};

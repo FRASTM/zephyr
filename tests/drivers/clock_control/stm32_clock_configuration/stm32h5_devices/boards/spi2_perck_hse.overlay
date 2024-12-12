@@ -1,0 +1,35 @@
+/*
+ * Copyright (c) 2021 Linaro Limited
+ * Copyright (c) 2024 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * Warning: This overlay performs configuration from clean sheet.
+ * It is assumed that it is applied after clear_clocks.overlay file.
+ */
+
+&clk_hse {
+	clock-frequency = <DT_FREQ_M(25)>;
+	hse-bypass; /* X3 is a 25MHz oscillator on PH0 */
+	status = "okay";
+};
+
+&perck {
+	clocks = <&rcc STM32_SRC_HSE CKPER_SEL(2)>;
+	status = "okay";
+};
+
+&spi2 {
+	pinctrl-0 = <&spi2_nss_pa3 &spi2_sck_pi1
+		     &spi2_miso_pi2 &spi2_mosi_pb15>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&spi2 {
+	status = "okay";
+	clocks = <&rcc STM32_CLOCK(APB1, 14U)>,
+			<&rcc STM32_SRC_CKPER SPI2_SEL(4)>;
+};
