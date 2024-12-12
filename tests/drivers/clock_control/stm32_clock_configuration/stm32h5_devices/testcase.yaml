@@ -1,0 +1,14 @@
+common:
+  timeout: 5
+  tags: clock_control
+
+tests:
+  drivers.clock.stm32_clock_configuration.h5.perck_source_hsi:
+    extra_args: DTC_OVERLAY_FILE="boards/clear_clocks.overlay;boards/spi2_perck_hsi.overlay"
+    platform_allow: stm32h573i_dk
+    drivers.clock.stm32_clock_configuration.h5.perck_source_csi:
+      extra_args: DTC_OVERLAY_FILE="boards/clear_clocks.overlay;boards/spi2_perck_csi.overlay"
+      platform_allow: stm32h573i_dk
+      drivers.clock.stm32_clock_configuration.h5.perck_source_hse:
+        extra_args: DTC_OVERLAY_FILE="boards/clear_clocks.overlay;boards/spi2_perck_hse.overlay"
+        platform_allow: stm32h573i_dk

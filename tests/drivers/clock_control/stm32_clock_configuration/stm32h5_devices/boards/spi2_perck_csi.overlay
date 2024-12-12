@@ -1,0 +1,27 @@
+/*
+ * Copyright (c) 2021 Linaro Limited
+ * Copyright (c) 2024 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * Warning: This overlay performs configuration from clean sheet.
+ * It is assumed that it is applied after clear_clocks.overlay file.
+ */
+
+&clk_csi {
+	/* CSI RC: 4MHz */
+	status = "okay";
+};
+
+&perck {
+	clocks = <&rcc STM32_SRC_CSI CKPER_SEL(1)>;
+	status = "okay";
+};
+
+&spi2 {
+	status = "okay";
+	clocks = <&rcc STM32_CLOCK(APB1, 14U)>,
+			<&rcc STM32_SRC_CKPER SPI2_SEL(4)>;
+};
