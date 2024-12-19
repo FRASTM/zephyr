@@ -12,7 +12,6 @@
 
 #include <soc.h>
 #include <stm32_ll_rcc.h>
-#include <stm32_ll_tim.h>
 #include <zephyr/drivers/pwm.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/drivers/reset.h>
@@ -26,6 +25,8 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/irq.h>
 
+
+#include "pwm_stm32.h"
 LOG_MODULE_REGISTER(pwm_stm32, CONFIG_PWM_LOG_LEVEL);
 
 /* L0 series MCUs only have 16-bit timers and don't have below macro defined */
@@ -778,7 +779,7 @@ static int pwm_stm32_init(const struct device *dev)
 
 	int r;
 	const struct device *clk;
-	LL_TIM_InitTypeDef init;
+	LL_PWM_InitTypeDef init;
 
 	/* enable clock and store its speed */
 	clk = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE);
@@ -811,14 +812,15 @@ static int pwm_stm32_init(const struct device *dev)
 	}
 
 	/* initialize timer */
-	LL_TIM_StructInit(&init);
+	LL_PWM_StructInit(&init);
 
 	init.Prescaler = cfg->prescaler;
 	init.CounterMode = cfg->countermode;
 	init.Autoreload = 0u;
 	init.ClockDivision = LL_TIM_CLOCKDIVISION_DIV1;
 
-	if (LL_TIM_Init(cfg->timer, &init) != SUCCESS) {
+
+	if (LL_PWM_Init(cfg->timer, &init) != SUCCESS) {
 		LOG_ERR("Could not initialize timer");
 		return -EIO;
 	}
