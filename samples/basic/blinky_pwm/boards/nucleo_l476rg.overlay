@@ -4,6 +4,10 @@
  * Copyright (c) 2022 STMicroelectronics
  */
 
+#include <zephyr/dt-bindings/reset/stm32g4_l4_5_reset.h>
+
+/delete-node/ &lptim2;
+/delete-node/ &pwm2;
 
 / {
 	pwmleds: pwmleds {
@@ -19,8 +23,40 @@
 		pwm-led0 = &green_pwm_led;
 	};
 
+	soc {
+		lptim2: timers@40009400 {
+			compatible = "st,stm32-timers";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x40009400 0x400>;
+			clocks = <&rcc STM32_CLOCK(APB1_2, 5U)>;
+			resets = <&rctl STM32_RESET(APB1H, 5U)>;
+			interrupts = <66 1>;
+			interrupt-names = "wakeup";
+			status = "disabled";
+
+			pwm {
+				compatible = "st,stm32-pwm";
+				status = "disabled";
+				#pwm-cells = <3>;
+			};
+		};
+	};
 };
 
-&pwm2 {
+&timers2 {
+	status = "disabled";
+};
+
+&lptim2 {
 	status = "okay";
+	st,prescaler = <255>;
+
+	pwm2: pwm {
+		status = "okay";
+		/* PA4 is A2 on Arduino CN8 pin3 */
+		pinctrl-0 = <&lptim2_out_pa4>;
+		pinctrl-names = "default";
+	};
+
 };
