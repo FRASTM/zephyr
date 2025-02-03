@@ -69,6 +69,16 @@ static __unused int commit_optb(const struct device *dev)
 	FLASH_TypeDef *regs = FLASH_STM32_REGS(dev);
 	int64_t timeout_time = k_uptime_get() + STM32H7_FLASH_OPT_TIMEOUT_MS;
 
+#ifdef FLASH_OPTCR_PG_OPT
+	regs->OPTCR |= FLASH_OPTCR_PG_OPT;
+	barrier_dsync_fence_full();
+	while (regs->SR & FLASH_SR_QW) {
+		if (k_uptime_get() > timeout_time) {
+			LOG_ERR("Timeout writing option bytes.");
+			return -ETIMEDOUT;
+		}
+	}
+#else
 	regs->OPTCR |= FLASH_OPTCR_OPTSTART;
 	barrier_dsync_fence_full();
 	while (regs->OPTSR_CUR & FLASH_OPTSR_OPT_BUSY) {
@@ -77,6 +87,7 @@ static __unused int commit_optb(const struct device *dev)
 			return -ETIMEDOUT;
 		}
 	}
+#endif
 
 	return 0;
 }
@@ -118,7 +129,12 @@ static __unused int write_opt(const struct device *dev, uint32_t mask, uint32_t 
 static __unused int write_optsr(const struct device *dev, uint32_t mask, uint32_t value)
 {
 	FLASH_TypeDef *regs = FLASH_STM32_REGS(dev);
+#ifdef FLASH_OPTCR_PG_OPT
+	/* Assuming the OBW1SR is addressed, not OBW2SR */
+	uintptr_t cur = (uintptr_t)regs + offsetof(FLASH_TypeDef, OBW1SR);
+#else
 	uintptr_t cur = (uintptr_t)regs + offsetof(FLASH_TypeDef, OPTSR_CUR);
+#endif /* FLASH_OPTCR_PG_OPT */
 
 	return write_opt(dev, mask, value, cur, true);
 }
