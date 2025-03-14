@@ -1143,7 +1143,6 @@ static int stm32_ospi_abort(const struct device *dev)
  * to erase the complete chip (using dedicated command) :
  *   set size >= flash size
  *   set addr = 0
- * NOTE: cannot erase in MemoryMapped mode
  */
 static int flash_stm32_ospi_erase(const struct device *dev, off_t addr,
 				  size_t size)
@@ -1176,6 +1175,13 @@ static int flash_stm32_ospi_erase(const struct device *dev, off_t addr,
 	ospi_lock_thread(dev);
 
 #ifdef CONFIG_STM32_MEMMAP
+#ifdef CONFIG_SOC_SERIES_STM32H7X
+	if (stm32_ospi_is_memorymap(dev)) {
+		/* No erase : exit directly with ret = 0 */
+		LOG_INF("MemoryMap : no explicit erase");
+		goto end_erase;
+	}
+#endif /* CONFIG_SOC_SERIES_STM32H7X */
 	if (stm32_ospi_is_memorymap(dev)) {
 		/* Abort ongoing transfer to force CS high/BUSY deasserted */
 		ret = stm32_ospi_abort(dev);
@@ -1423,7 +1429,6 @@ static int flash_stm32_ospi_read(const struct device *dev, off_t addr,
 
 /*
  * Function to write the flash (page program) : with possible OSPI/SPI and STR/DTR
- * NOTE: writing  in MemoryMapped mode is not guaranted
  */
 static int flash_stm32_ospi_write(const struct device *dev, off_t addr,
 				  const void *data, size_t size)
@@ -1447,6 +1452,16 @@ static int flash_stm32_ospi_write(const struct device *dev, off_t addr,
 	ospi_lock_thread(dev);
 
 #ifdef CONFIG_STM32_MEMMAP
+#ifdef CONFIG_SOC_SERIES_STM32H7X
+	if (stm32_ospi_is_memorymap(dev)) {
+		LOG_DBG("MemoryMapped Write offset: 0x%lx, len: %zu",
+			(long)(STM32_OSPI_BASE_ADDRESS + addr),
+			size);
+		memcpy((uint8_t *)STM32_OSPI_BASE_ADDRESS + addr, data, size);
+
+		return 0;
+	}
+#endif /* CONFIG_SOC_SERIES_STM32H7X */
 	if (stm32_ospi_is_memorymap(dev)) {
 		/* Abort ongoing transfer to force CS high/BUSY deasserted */
 		ret = stm32_ospi_abort(dev);
