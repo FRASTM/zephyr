@@ -11,5 +11,6 @@ supported:
   - uart
   - watchdog
   - entropy
+  - dma
   - adc
 vendor: st
