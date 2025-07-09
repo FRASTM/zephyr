@@ -436,7 +436,7 @@ static int set_up_plls(void)
 
 #if defined(STM32_PLL_ENABLED)
 
-#if defined(CONFIG_BOOTLOADER_MCUBOOT)
+#if defined(CONFIG_FLASH_STM32_XSPI_XIP)
 	/*
 	 * Don't disable PLL1 during application initialization
 	 * that runs on the external octospi flash (in memmap mode)
@@ -445,7 +445,7 @@ static int set_up_plls(void)
 	if (LL_RCC_GetOCTOSPIClockSource(LL_RCC_OCTOSPI_CLKSOURCE) == LL_RCC_OSPI_CLKSOURCE_PLL1Q) {
 		goto setup_pll2;
 	}
-#endif
+#endif /* CONFIG_FLASH_STM32_XSPI_XIP */
 	/*
 	 * Case of chain-loaded applications:
 	 * Switch to HSI and disable the PLL before configuration.
@@ -525,7 +525,7 @@ static int set_up_plls(void)
 setup_pll2:
 #if defined(STM32_PLL2_ENABLED)
 
-#if defined(CONFIG_BOOTLOADER_MCUBOOT)
+#if defined(CONFIG_FLASH_STM32_XSPI_XIP)
 	/*
 	 * Don't disable PLL2 during application initialization
 	 * that runs on the external octospi flash (in memmap mode)
@@ -534,7 +534,7 @@ setup_pll2:
 	if (LL_RCC_GetOCTOSPIClockSource(LL_RCC_OCTOSPI_CLKSOURCE) == LL_RCC_OSPI_CLKSOURCE_PLL2R) {
 		goto setup_pll3;
 	}
-#endif
+#endif /* CONFIG_FLASH_STM32_XSPI_XIP */
 	LL_RCC_PLL2_Disable();
 
 	/* Configure PLL2 source */
