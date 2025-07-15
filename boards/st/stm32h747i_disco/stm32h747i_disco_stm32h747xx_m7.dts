@@ -119,6 +119,10 @@
 		#address-cells = <1>;
 		#size-cells = <1>;
 
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x00000000 DT_SIZE_K(64)>;
+		};
 		/* Set 2KB of storage at the end of first 1MB flash */
 		storage_partition: partition@ff800 {
 			label = "storage";
@@ -267,9 +271,20 @@ zephyr_udc0: &usbotg_hs {
 			#address-cells = <1>;
 			#size-cells = <1>;
 
-			partition@0 {
-				reg = <0x0 DT_SIZE_M(64)>;
+			slot0_partition: partition@0 {
+				label = "image-0";
+				reg = <0x00000000 DT_SIZE_K(256)>;
 			};
+
+			slot1_partition: partition@40000 {
+				label = "image-1";
+				reg = <0x00040000 DT_SIZE_K(256)>;
+			};
+
+			scratch_partition: partition@e0000 {
+				label = "image-scratch";
+				reg = <0x000e0000 DT_SIZE_K(64)>;
+ 			};
 		};
 	};
 

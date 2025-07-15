@@ -15,5 +15,4 @@ supported:
   - netif:eth
   - qspi
   - memc
-  - usb_device
 vendor: st
