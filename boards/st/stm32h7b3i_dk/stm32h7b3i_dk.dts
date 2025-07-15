@@ -276,6 +276,24 @@
 	def-back-color-blue = <0xFF>;
 };
 
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x00000000 DT_SIZE_K(64)>;
+		};
+
+		storage_partition: partition@f0000 {
+			label = "storage";
+			reg = <0x000f0000 DT_SIZE_K(64)>;
+		};
+	};
+};
+
 &octospi1 {
 	pinctrl-0 = <&octospim_p1_clk_pb2 &octospim_p1_ncs_pg6
 		     &octospim_p1_io0_pd11 &octospim_p1_io1_pf9
@@ -301,9 +319,19 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 
-			partition@0 {
-				label = "nor";
-				reg = <0x00000000 DT_SIZE_M(4)>;
+			slot0_partition: partition@0 {
+				label = "image-0";
+				reg = <0x00000000 DT_SIZE_K(256)>;
+			};
+
+			slot1_partition: partition@40000 {
+				label = "image-1";
+				reg = <0x00040000 DT_SIZE_K(256)>;
+			};
+
+			scratch_partition: partition@e0000 {
+				label = "image-scratch";
+				reg = <0x000e0000 DT_SIZE_K(64)>;
 			};
 		};
 	};
