@@ -18,6 +18,8 @@ tests:
       - nucleo_u385rg_q
       - b_u585i_iot02a
       - stm32h735g_disco
+      - tm32h747i_disco/stm32h747xx/m7
+      - stm32h750b_dk
       - stm32h7b3i_dk
       - stm32h7s78_dk
     integration_platforms:
