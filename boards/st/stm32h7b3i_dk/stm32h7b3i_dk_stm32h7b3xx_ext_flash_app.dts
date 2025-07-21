@@ -1,0 +1,66 @@
+/*
+ * Copyright (c) 2025 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+#include "stm32h7b3i_dk.dtsi"
+
+/ {
+	model = "STMicroelectronics STM32H7B3I DISCOVERY KIT board";
+	compatible = "st,stm32h7b3i-dk";
+
+	chosen {
+		zephyr,console = &usart1;
+		zephyr,shell-uart = &usart1;
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+		zephyr,code-partition = &slot0_partition;
+		zephyr,display = &ltdc;
+		zephyr,canbus = &fdcan1;
+		zephyr,touch = &ft5336;
+	};
+};
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x00000000 DT_SIZE_K(64)>;
+		};
+
+		storage_partition: partition@100000 {
+			label = "storage";
+			reg = <0x00100000 DT_SIZE_K(64)>;
+		};
+	};
+};
+
+&mx25lm51245 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		slot0_partition: partition@0 {
+			label = "image-0";
+			reg = <0x00000000 DT_SIZE_K(416)>;
+		};
+
+		slot1_partition: partition@68000 {
+			label = "image-1";
+			reg = <0x00068000 DT_SIZE_K(416)>;
+		};
+
+		scratch_partition: partition@d0000 {
+			label = "image-scratch";
+			reg = <0x000d0000 DT_SIZE_K(192)>;
+		};
+	};
+
+};
