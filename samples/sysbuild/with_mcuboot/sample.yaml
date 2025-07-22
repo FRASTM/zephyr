@@ -17,6 +17,7 @@ tests:
       - nucleo_h7s3l8
       - nucleo_u385rg_q
       - b_u585i_iot02a/stm32u585xx/ext_flash_app
+      - stm32h7b3i_dk/stm32h7b3ixx/ext_flash_app
       - stm32h7s78_dk
       - stm32h573i_dk
     integration_platforms:
