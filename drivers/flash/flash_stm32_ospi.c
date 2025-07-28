@@ -1333,6 +1333,11 @@ static int flash_stm32_ospi_read(const struct device *dev, off_t addr,
 		return 0;
 	}
 
+#if defined(CONFIG_STM32_MEMMAP) || defined(CONFIG_STM32_APP_IN_EXT_FLASH)
+	/*
+	 * When the call is made by an app executing in external flash,
+	 * skip the memory-mapped mode check
+	 */
 #ifdef CONFIG_STM32_MEMMAP
 	/* If not MemMapped then configure it */
 	if (!stm32_ospi_is_memorymap(dev)) {
@@ -1341,16 +1346,16 @@ static int flash_stm32_ospi_read(const struct device *dev, off_t addr,
 			return -EIO;
 		}
 	}
+#endif  /* CONFIG_STM32_MEMMAP */
 	/* Now in MemMapped mode : read with memcopy */
 	LOG_DBG("MemoryMapped Read offset: 0x%lx, len: %zu",
 		(long)(STM32_OSPI_BASE_ADDRESS + addr),
 		size);
 	memcpy(data, (uint8_t *)STM32_OSPI_BASE_ADDRESS + addr, size);
 
-#else /* CONFIG_STM32_MEMMAP */
+#else
 	const struct flash_stm32_ospi_config *dev_cfg = dev->config;
 	struct flash_stm32_ospi_data *dev_data = dev->data;
-
 
 	OSPI_RegularCmdTypeDef cmd = ospi_prepare_cmd(dev_cfg->data_mode, dev_cfg->data_rate);
 
@@ -1417,7 +1422,7 @@ static int flash_stm32_ospi_read(const struct device *dev, off_t addr,
 
 	ospi_unlock_thread(dev);
 
-#endif /* CONFIG_STM32_MEMMAP */
+#endif /* CONFIG_STM32_MEMMAP || CONFIG_STM32_APP_IN_EXT_FLASH */
 	return ret;
 }
 
