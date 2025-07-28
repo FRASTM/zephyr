@@ -604,7 +604,7 @@ static int stm32_qspi_abort(const struct device *dev)
 static int flash_stm32_qspi_read(const struct device *dev, off_t addr,
 				 void *data, size_t size)
 {
-	int ret;
+	int ret = 0;
 
 	if (!qspi_address_is_valid(dev, addr, size)) {
 		LOG_DBG("Error: address or size exceeds expected values: "
@@ -617,26 +617,28 @@ static int flash_stm32_qspi_read(const struct device *dev, off_t addr,
 		return 0;
 	}
 
+#if defined(CONFIG_STM32_MEMMAP) || defined(CONFIG_STM32_APP_IN_EXT_FLASH)
+	/*
+	 * When the call is made by an app executing in external flash,
+	 * skip the memory-mapped mode check
+	 */
 #ifdef CONFIG_STM32_MEMMAP
-	qspi_lock_thread(dev);
-
 	/* Do reads through memory-mapping instead of indirect */
 	if (!stm32_qspi_is_memory_mapped(dev)) {
 		ret = stm32_qspi_set_memory_mapped(dev);
 		if (ret != 0) {
 			LOG_ERR("READ: failed to set memory mapped");
-			goto end;
+			return ret;
 		}
 	}
 
 	__ASSERT_NO_MSG(stm32_qspi_is_memory_mapped(dev));
-
+#endif /* CONFIG_STM32_MEMMAP */
 	uintptr_t mmap_addr = STM32_QSPI_BASE_ADDRESS + addr;
 
 	LOG_DBG("Memory-mapped read from 0x%08lx, len %zu", mmap_addr, size);
 	memcpy(data, (void *)mmap_addr, size);
-	ret = 0;
-	goto end;
+	return ret;
 #else
 	QSPI_CommandTypeDef cmd = {
 		.Instruction = SPI_NOR_CMD_READ,
@@ -657,11 +659,9 @@ static int flash_stm32_qspi_read(const struct device *dev, off_t addr,
 	qspi_lock_thread(dev);
 
 	ret = qspi_read_access(dev, &cmd, data, size);
-	goto end;
-#endif
 
-end:
 	qspi_unlock_thread(dev);
+#endif /* CONFIG_STM32_MEMMAP || CONFIG_STM32_APP_IN_EXT_FLASH */
 
 	return ret;
 }
