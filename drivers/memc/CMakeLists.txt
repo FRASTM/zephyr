@@ -14,6 +14,7 @@ if((DEFINED CONFIG_FLASH_MCUX_FLEXSPI_XIP) AND (DEFINED CONFIG_FLASH))
   zephyr_code_relocate(FILES memc_mcux_flexspi.c LOCATION ${CONFIG_FLASH_MCUX_FLEXSPI_XIP_MEM}_TEXT)
 endif()
 
+zephyr_library_sources_ifdef(CONFIG_MEMC_MSPI_APS256             memc_mspi_aps256.c)
 zephyr_library_sources_ifdef(CONFIG_MEMC_MSPI_APS6404L           memc_mspi_aps6404l.c)
 zephyr_library_sources_ifdef(CONFIG_MEMC_MSPI_APS_Z8             memc_mspi_aps_z8.c)
 zephyr_library_include_directories_ifdef(CONFIG_MEMC_MSPI ${ZEPHYR_BASE}/drivers/mspi)
