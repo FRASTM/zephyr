@@ -16,6 +16,7 @@ endif()
 
 zephyr_library_sources_ifdef(CONFIG_MEMC_MSPI_APS256             memc_mspi_aps256.c)
 zephyr_library_sources_ifdef(CONFIG_MEMC_MSPI_APS6404L           memc_mspi_aps6404l.c)
+zephyr_library_sources_ifdef(CONFIG_MEMC_MSPI_APS6408L           memc_mspi_aps6408l.c)
 zephyr_library_sources_ifdef(CONFIG_MEMC_MSPI_APS_Z8             memc_mspi_aps_z8.c)
 zephyr_library_include_directories_ifdef(CONFIG_MEMC_MSPI ${ZEPHYR_BASE}/drivers/mspi)
 
