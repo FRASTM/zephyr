@@ -9,6 +9,13 @@ config MEMC_MSPI
 	help
 	  MSPI MEMC drivers are enabled.
 
+config MEMC_MSPI_APS256
+	bool "MSPI AP Memory APS256 pSRAM driver"
+	default y
+	depends on DT_HAS_MSPI_APS256_ENABLED
+	select MEMC_MSPI
+	select MSPI_AMBIQ_CONTROLLER if SOC_FAMILY_AMBIQ
+
 config MEMC_MSPI_APS6404L
 	bool "MSPI AP Memory APS6404L pSRAM driver"
 	default y
