@@ -65,7 +65,9 @@ static XSPI_RegularCmdTypeDef mspi_stm32_xspi_prepare_cmd(uint8_t cfg_mode, uint
 								 : HAL_XSPI_DATA_DTR_DISABLE);
 	cmd_tmp.DQSMode =
 		((cfg_rate == MSPI_DATA_RATE_DUAL) ? HAL_XSPI_DQS_ENABLE : HAL_XSPI_DQS_DISABLE);
+#ifdef XSPI_CCR_SIOO
 	cmd_tmp.SIOOMode = HAL_XSPI_SIOO_INST_EVERY_CMD;
+#endif /* XSPI_CCR_SIOO */
 
 	switch (cfg_mode) {
 	case MSPI_IO_MODE_OCTAL: {
@@ -1550,9 +1552,9 @@ static int mspi_hal_init(const struct mspi_stm32_conf *dev_cfg, struct mspi_stm3
 		dev_data->hmspi.xspi.Init.MemoryType = HAL_XSPI_MEMTYPE_MICRON;
 		dev_data->hmspi.xspi.Init.DelayHoldQuarterCycle = HAL_XSPI_DHQC_DISABLE;
 	}
-
+#if defined(XSPI_DCR1_DLYBYP)
 	dev_data->hmspi.xspi.Init.DelayBlockBypass = HAL_XSPI_DELAY_BLOCK_ON;
-
+#endif /* XSPI_DCR1_DLYBYP */
 	if (HAL_XSPI_Init(&dev_data->hmspi.xspi) != HAL_OK) {
 		LOG_ERR("MSPI Init failed");
 		return -EIO;
