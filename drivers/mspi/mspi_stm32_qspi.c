@@ -259,9 +259,32 @@ static int mspi_stm32_qspi_execute_transfer(const struct device *dev,
 			ret = HAL_QSPI_Receive_IT(&dev_data->hmspi.qspi, packet->data_buf);
 			break;
 		case MSPI_ACCESS_DMA:
-			/* DMA mode not yet implemented for QSPI */
-			LOG_ERR("DMA mode not supported yet for QSPI");
-			return -ENOTSUP;
+			uint8_t *dma_buf = k_aligned_alloc(CONFIG_MSPI_STM32_BUFFER_ALIGNMENT,
+					packet->num_bytes);
+
+			if (!dma_buf) {
+				LOG_ERR("DMA buffer allocation failed");
+				pm_policy_state_lock_put(PM_STATE_SUSPEND_TO_IDLE,
+					PM_ALL_SUBSTATES);
+				(void)pm_device_runtime_put(dev);
+				return -ENOMEM;
+			}
+			ret = HAL_QSPI_Receive_DMA(&dev_data->hmspi.qspi, dma_buf);
+			if (ret == HAL_OK) {
+				if (k_sem_take(&dev_data->sync, K_FOREVER) < 0) {
+					LOG_ERR("%d: Failed to take sem",
+						dev_data->hmspi.qspi.ErrorCode);
+					k_free(dma_buf);
+					pm_policy_state_lock_put(PM_STATE_SUSPEND_TO_IDLE,
+						PM_ALL_SUBSTATES);
+					(void)pm_device_runtime_put(dev);
+					return -EIO;
+				}
+				memcpy(packet->data_buf, dma_buf, packet->num_bytes);
+			}
+			k_free(dma_buf);
+			return ret;
+
 		default:
 			LOG_ERR("Invalid access mode: %d", access_mode);
 			return -EINVAL;
@@ -277,9 +300,8 @@ static int mspi_stm32_qspi_execute_transfer(const struct device *dev,
 			ret = HAL_QSPI_Transmit_IT(&dev_data->hmspi.qspi, packet->data_buf);
 			break;
 		case MSPI_ACCESS_DMA:
-			/* DMA mode not yet implemented for QSPI */
-			LOG_ERR("DMA mode not supported yet for QSPI");
-			return -ENOTSUP;
+			ret = HAL_QSPI_Transmit_DMA(&dev_data->hmspi.qspi, packet->data_buf);
+			break;
 		default:
 			LOG_ERR("Invalid access mode: %d", access_mode);
 			return -EINVAL;
@@ -418,6 +440,89 @@ static int mspi_stm32_qspi_access(const struct device *dev, const struct mspi_xf
 	return ret;
 }
 
+static int mspi_stm32_qspi_dma_init(DMA_HandleTypeDef *hdma, struct stm32_stream *dma_stream)
+{
+	int ret;
+	/*
+	 * DMA configuration
+	 * Due to use of XSPI HAL API in current driver,
+	 * both HAL and Zephyr DMA drivers should be configured.
+	 * The required configuration for Zephyr DMA driver should only provide
+	 * the minimum information to inform the DMA slot will be in used and
+	 * how to route callbacks.
+	 */
+
+	if (!device_is_ready(dma_stream->dev)) {
+		LOG_ERR("DMA %s device not ready", dma_stream->dev->name);
+		return -ENODEV;
+	}
+
+	dma_stream->cfg.user_data = hdma;
+	/* This field is used to inform driver that it is overridden */
+	dma_stream->cfg.linked_channel = STM32_DMA_HAL_OVERRIDE;
+	ret = dma_config(dma_stream->dev, dma_stream->channel, &dma_stream->cfg);
+	if (ret != 0) {
+		LOG_ERR("Failed to configure DMA channel %d", dma_stream->channel);
+		return ret;
+	}
+
+	/* Proceed to the HAL DMA driver init */
+	if (dma_stream->cfg.source_data_size != dma_stream->cfg.dest_data_size) {
+		LOG_ERR("DMA Source and destination data sizes not aligned");
+		return -EINVAL;
+	}
+
+	int index = find_lsb_set(dma_stream->cfg.source_data_size) - 1;
+
+	hdma->Init.PeriphDataAlignment = table_src_size[index];
+	hdma->Init.MemDataAlignment = table_dest_size[index];
+	hdma->Init.PeriphInc = DMA_PINC_DISABLE;
+	hdma->Init.MemInc = DMA_MINC_ENABLE;
+	hdma->Init.Mode = DMA_NORMAL;
+	hdma->Init.Priority = table_priority[dma_stream->cfg.channel_priority];
+#ifdef CONFIG_DMA_STM32_V1
+	/* TODO: Not tested in this configuration */
+	hdma->Init.Channel = dma_stream->cfg.dma_slot;
+#else
+	hdma->Init.Request = dma_stream->cfg.dma_slot;
+#endif /* CONFIG_DMA_STM32_V1 */
+
+	/*
+	 * HAL expects a valid DMA channel.
+	 * The channel is from 0 to 7 because of the STM32_DMA_STREAM_OFFSET
+	 * in the dma_stm32 driver
+	 */
+	hdma->Instance = STM32_DMA_GET_CHANNEL_INSTANCE(dma_stream->reg, dma_stream->channel);
+
+	/* Initialize DMA HAL */
+	if (HAL_DMA_Init(hdma) != HAL_OK) {
+		LOG_ERR("QSPI DMA Init failed");
+		return -EIO;
+	}
+
+	LOG_INF("QSPI with DMA transfer");
+	return 0;
+}
+
+static int mspi_dma_setup(const struct mspi_stm32_conf *dev_cfg, struct mspi_stm32_data *dev_data)
+{
+	if (!dev_cfg->use_dma) {
+		return 0;
+	}
+
+	static DMA_HandleTypeDef hdma;
+
+	if (mspi_stm32_qspi_dma_init(&hdma, &dev_data->dma) != 0) {
+		LOG_ERR("QSPI DMA init failed");
+		return -EIO;
+	}
+	__HAL_LINKDMA(&dev_data->hmspi.qspi, hdma, hdma);
+
+	LOG_INF("DMA transfer init'd");
+
+	return 0;
+}
+
 /**
  * API implementation of mspi_config : controller configuration.
  *
@@ -520,11 +625,20 @@ static int mspi_stm32_qspi_config(const struct mspi_dt_spec *spec)
 		return -EIO;
 	}
 
+	ret = mspi_dma_setup(cfg, data);
+	if (ret != 0) {
+		goto end;
+	}
+
 	/* Initialize semaphores */
 	if (!k_sem_count_get(&data->ctx.lock)) {
 		k_sem_give(&data->ctx.lock);
 	}
+	if (config->re_init) {
+		k_mutex_unlock(&data->lock);
+	}
 
+end:
 	LOG_INF("QSPI controller configured successfully");
 
 	return 0;
@@ -927,9 +1041,10 @@ static int mspi_stm32_qspi_get_channel_status(const struct device *controller, u
 	return ret;
 }
 
-static int mspi_stm32_qspi_pio_transceive(const struct device *controller,
+static int mspi_stm32_qspi_pio_dma_transceive(const struct device *controller,
 					  const struct mspi_xfer *xfer)
 {
+	const struct mspi_stm32_conf *dev_cfg = controller->config;
 	struct mspi_stm32_data *dev_data = controller->data;
 	struct mspi_stm32_context *ctx = &dev_data->ctx;
 	const struct mspi_xfer_packet *packet;
@@ -956,9 +1071,13 @@ static int mspi_stm32_qspi_pio_transceive(const struct device *controller,
 		 * Always starts with a command,
 		 * then payload is given by the xfer->num_packet
 		 */
-		ret = mspi_stm32_qspi_access(controller, packet,
-					     (ctx->xfer.async == true) ? MSPI_ACCESS_ASYNC
-								       : MSPI_ACCESS_SYNC);
+		if (!dev_cfg->use_dma) {
+			ret = mspi_stm32_qspi_access(controller, packet,
+					  (ctx->xfer.async == true) ? MSPI_ACCESS_ASYNC
+						: MSPI_ACCESS_SYNC);
+		} else {
+			ret = mspi_stm32_qspi_access(controller, packet, MSPI_ACCESS_DMA);
+		}
 
 		ctx->packets_left--;
 
@@ -1001,8 +1120,8 @@ static int mspi_stm32_qspi_transceive(const struct device *controller,
 	/* Need to map the xfer to the data context */
 	data->ctx.xfer = *xfer;
 
-	if (xfer->xfer_mode == MSPI_PIO) {
-		ret = mspi_stm32_qspi_pio_transceive(controller, xfer);
+	if ((xfer->xfer_mode == MSPI_PIO) || (xfer->xfer_mode == MSPI_DMA)) {
+		ret = mspi_stm32_qspi_pio_dma_transceive(controller, xfer);
 	} else {
 		ret = -EIO;
 	}
@@ -1137,6 +1256,45 @@ static struct mspi_driver_api mspi_stm32_qspi_driver_api = {
 	.transceive = mspi_stm32_qspi_transceive,
 };
 
+#define MSPI_QSPI_DMA_CALLBACK(index)                                                              \
+	COND_CODE_1(DT_NODE_HAS_PROP(DT_DRV_INST(index), dmas), \
+	(static void mspi_stm32_qspi_dma_callback(const struct device *dev, void *arg, \
+						  uint32_t channel, int status) { \
+		DMA_HandleTypeDef *hdma = arg; \
+		ARG_UNUSED(dev); \
+		if (status < 0) { \
+			LOG_ERR("DMA callback error with channel %d", channel); \
+		} \
+		HAL_DMA_IRQHandler(hdma); \
+	}), \
+	())
+
+#define DMA_CHANNEL_CONFIG(node, dir)					\
+		DT_DMAS_CELL_BY_NAME(node, dir, channel_config)
+
+#define QSPI_DMA_CHANNEL_INIT(node, dir)				\
+	.dev = DEVICE_DT_GET(DT_DMAS_CTLR(node)),			\
+	.channel = DT_DMAS_CELL_BY_NAME(node, dir, channel),		\
+	.reg = (DMA_TypeDef *)DT_REG_ADDR(				\
+				   DT_PHANDLE_BY_NAME(node, dmas, dir)),\
+	.cfg = {							\
+		.dma_slot = DT_DMAS_CELL_BY_NAME(node, dir, slot),	\
+		.source_data_size = STM32_DMA_CONFIG_PERIPHERAL_DATA_SIZE( \
+					DMA_CHANNEL_CONFIG(node, dir)), \
+		.dest_data_size = STM32_DMA_CONFIG_MEMORY_DATA_SIZE(    \
+					DMA_CHANNEL_CONFIG(node, dir)), \
+		.channel_priority = STM32_DMA_CONFIG_PRIORITY(		\
+					DMA_CHANNEL_CONFIG(node, dir)), \
+		.dma_callback = mspi_stm32_qspi_dma_callback,			\
+	},								\
+
+#define QSPI_DMA_CHANNEL(node, dir)					\
+	.dma = {							\
+		COND_CODE_1(DT_DMAS_HAS_NAME(node, dir),		\
+			(QSPI_DMA_CHANNEL_INIT(node, dir)),		\
+			(NULL))						\
+		},
+
 /* MSPI QSPI control config */
 #define MSPI_QSPI_CONFIG(n)                                                                        \
 	{                                                                                          \
@@ -1148,7 +1306,7 @@ static struct mspi_driver_api mspi_stm32_qspi_driver_api = {
 		.num_periph = DT_INST_CHILD_NUM(n),                                                \
 		.sw_multi_periph = DT_INST_PROP_OR(n, software_multiperipheral, false),            \
 		.num_ce_gpios = ARRAY_SIZE(ce_gpios##n),                                           \
-		.ce_group = ce_gpios##n,                                                           \
+		.ce_group = (struct gpio_dt_spec *)ce_gpios##n,                                                           \
 	}
 
 #define STM32_MSPI_QSPI_IRQ_HANDLER(index)                                                         \
@@ -1166,12 +1324,14 @@ static struct mspi_driver_api mspi_stm32_qspi_driver_api = {
 	PINCTRL_DT_INST_DEFINE(index);                                                             \
 	STM32_MSPI_QSPI_IRQ_HANDLER(index)                                                         \
 	PM_DEVICE_DT_INST_DEFINE(index, mspi_stm32_qspi_pm_action);                                \
+	MSPI_QSPI_DMA_CALLBACK(index);                                                             \
 	static const struct mspi_stm32_conf mspi_stm32_qspi_dev_conf_##index = {                   \
 		.pclken = pclken_##index,                                                          \
 		.pclk_len = DT_INST_NUM_CLOCKS(index),                                             \
 		.irq_config = mspi_stm32_irq_config_func_##index,                                  \
 		.mspicfg = MSPI_QSPI_CONFIG(index),                                                \
 		.pcfg = PINCTRL_DT_DEV_CONFIG_GET(DT_DRV_INST(index)),                             \
+		.use_dma = DT_NODE_HAS_PROP(DT_DRV_INST(index), dmas), 								\
 	};                                                                                         \
 	static struct mspi_stm32_data mspi_stm32_qspi_dev_data_##index = {                         \
 		.hmspi.qspi =                                                                      \
@@ -1196,6 +1356,7 @@ static struct mspi_driver_api mspi_stm32_qspi_driver_api = {
 		.dev_cfg = {0},                                                                    \
 		.xip_cfg = {0},                                                                    \
 		.ctx.lock = Z_SEM_INITIALIZER(mspi_stm32_qspi_dev_data_##index.ctx.lock, 0, 1),    \
+		QSPI_DMA_CHANNEL(DT_DRV_INST(index), tx_rx)											\
 	};                                                                                         \
 	DEVICE_DT_INST_DEFINE(index, &mspi_stm32_qspi_init,                                        \
 			      PM_DEVICE_DT_INST_GET(index),                                        \
