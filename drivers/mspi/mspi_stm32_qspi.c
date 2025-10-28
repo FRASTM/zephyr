@@ -29,7 +29,7 @@
 
 LOG_MODULE_REGISTER(mspi_stm32_qspi, CONFIG_MSPI_LOG_LEVEL);
 
-static inline int mspi_context_lock(struct mspi_context *ctx, const struct mspi_dev_id *req,
+static inline int mspi_context_lock(struct mspi_stm32_context *ctx, const struct mspi_dev_id *req,
 				    const struct mspi_xfer *xfer, bool lockon)
 {
 	int ret = 0;
@@ -931,7 +931,7 @@ static int mspi_stm32_qspi_pio_transceive(const struct device *controller,
 					  const struct mspi_xfer *xfer)
 {
 	struct mspi_stm32_data *dev_data = controller->data;
-	struct mspi_context *ctx = &dev_data->ctx;
+	struct mspi_stm32_context *ctx = &dev_data->ctx;
 	const struct mspi_xfer_packet *packet;
 	uint32_t packet_idx;
 	int ret = 0;
