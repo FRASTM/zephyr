@@ -6,6 +6,11 @@
  */
 /* Replace the quadspi by a "st,stm32-qspi-controller" compatible */
 /delete-node/ &quadspi;
+
+&dma2 {
+	status = "okay";
+};
+
 / {
 	aliases {
 		flash0 = &mx25r6435;
@@ -27,6 +32,9 @@
 			     &quadspi_bk1_io2_pa7 &quadspi_bk1_io3_pa6
 			     &quadspi_bk1_ncs_pb11 &quadspi_clk_pa3>;
 			pinctrl-names = "default";
+
+			dmas = <&dma2 7 3 STM32_DMA_PERIPH_RX>; /* channel 7 request 3 on DMA2 */
+			dma-names = "tx_rx";
 
 			status = "okay";
 
