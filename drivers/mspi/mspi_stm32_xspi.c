@@ -192,7 +192,13 @@ static int mspi_stm32_xspi_memmap_on(const struct device *controller)
 	s_command.DataDTRMode = (dev_data->dev_cfg.data_rate == MSPI_DATA_RATE_SINGLE)
 					? HAL_XSPI_DATA_DTR_DISABLE
 					: HAL_XSPI_DATA_DTR_ENABLE;
-	s_command.DummyCycles = dev_data->ctx.xfer.rx_dummy;
+	s_command.DummyCycles = (dev_data->dev_cfg.data_rate == MSPI_DATA_RATE_SINGLE)
+				? ((dev_data->dev_cfg.io_mode == MSPI_IO_MODE_SINGLE)
+					? MSPI_NOR_DUMMY_RD
+					: MSPI_NOR_DUMMY_RD_OCTAL)
+				: MSPI_NOR_DUMMY_RD_OCTAL_DTR;
+
+
 	s_command.DQSMode = (dev_data->dev_cfg.data_rate == MSPI_DATA_RATE_SINGLE)
 				    ? HAL_XSPI_DQS_DISABLE
 				    : HAL_XSPI_DQS_ENABLE;

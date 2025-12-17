@@ -83,6 +83,9 @@
 #define MSPI_NOR_AUTO_POLLING_INTERVAL   0x10
 
 /* Flash Dummy Cycles values */
+#define MSPI_NOR_DUMMY_RD            8U
+#define MSPI_NOR_DUMMY_RD_OCTAL      6U
+#define MSPI_NOR_DUMMY_RD_OCTAL_DTR  6U
 #define MSPI_NOR_DUMMY_REG_OCTAL         4U
 #define MSPI_NOR_DUMMY_REG_OCTAL_DTR     5U
 
