@@ -24,3 +24,23 @@ tests:
     integration_platforms:
       - apollo3p_evb
       - apollo510_evb
+  sample.drivers.mspi.flash.stm32.memmap:
+    filter: dt_compat_enabled("jedec,spi-nor") or dt_compat_enabled("jedec,mspi-nor")
+    integration_platforms:
+      - stm32h573i_dk
+    extra_configs:
+      - CONFIG_MSPI_DMA=n
+      - CONFIG_MSPI_XIP=y
+    harness: console
+    harness_config:
+      type: multi_line
+      ordered: true
+      regex:
+        - "Test 1: Flash erase"
+        - "Flash erase succeeded!"
+        - "Test 2: Flash write"
+        - "Attempting to write 4 bytes"
+        - "Data read matches data written. Good!!"      
+    platform_allow:
+      - stm32h573i_dk
+
