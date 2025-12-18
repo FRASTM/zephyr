@@ -249,6 +249,8 @@ DT_CHOSEN_Z_FLASH := zephyr,flash
 
 config FLASH_SIZE
 	int "Flash Size in kB"
+	default $(dt_node_array_prop_int,$(dt_chosen_path,$(DT_CHOSEN_Z_FLASH)),xip-config,2,K) \
+		if $(dt_chosen_has_compat,$(DT_CHOSEN_Z_FLASH),$(DT_COMPAT_JEDEC_MSPI_NOR))
 	default $(dt_chosen_reg_size_int,$(DT_CHOSEN_Z_FLASH),0,K) if (XIP && (ARM ||ARM64)) || !ARM
 	default 0 if !XIP
 	help
@@ -256,8 +258,14 @@ config FLASH_SIZE
 	  the board's defconfig file and the user should generally avoid modifying
 	  it via the menu configuration.
 
+DT_CHOSEN_Z_FLASH_PATH := $(dt_chosen_path,$(DT_CHOSEN_Z_FLASH))
+DT_CHOSEN_FLASH_PARENT_BASE := $(dt_node_reg_addr_int,$(dt_node_parent,$(DT_CHOSEN_Z_FLASH_PATH)),1)
+DT_CHOSEN_FLASH_OFFSET := $(dt_node_array_prop_int,$(dt_chosen_path,$(DT_CHOSEN_Z_FLASH)),xip-config,1)
+
 config FLASH_BASE_ADDRESS
 	hex "Flash Base Address"
+	default $(add_hex,$(DT_CHOSEN_FLASH_PARENT_BASE),$(DT_CHOSEN_FLASH_OFFSET)) \
+		if $(dt_chosen_has_compat,$(DT_CHOSEN_Z_FLASH),$(DT_COMPAT_JEDEC_MSPI_NOR))
 	default $(dt_chosen_reg_addr_hex,$(DT_CHOSEN_Z_FLASH)) if (XIP && (ARM || ARM64)) || !ARM
 	default 0 if !XIP
 	help
