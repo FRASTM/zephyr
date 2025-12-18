@@ -49,8 +49,11 @@ DT_COMPAT_XSPI := st,stm32-xspi
 DT_COMPAT_OSPI := st,stm32-ospi
 DT_COMPAT_QSPI := st,stm32-qspi
 
-DT_CHOSEN_FLASH_NODE := $(dt_chosen_path,$(DT_CHOSEN_Z_FLASH))
-DT_CHOSEN_FLASH_PARENT := $(dt_node_parent,$(DT_CHOSEN_FLASH_NODE))
+DT_CHOSEN_FLASH_PATH := $(dt_chosen_path,$(DT_CHOSEN_Z_FLASH))
+DT_CHOSEN_FLASH_PARENT := $(dt_node_parent,$(DT_CHOSEN_FLASH_PATH))
+DT_CHOSEN_FLASH_PARENT_BASE := $(dt_node_reg_addr_int,$(dt_node_parent,$(DT_CHOSEN_FLASH_PATH)),1)
+DT_CHOSEN_FLASH_OFFSET := $(dt_node_array_prop_int,$(dt_chosen_path,$(DT_CHOSEN_Z_FLASH)),xip-config,1)
+
 DT_FLASH_PARENT_IS_XSPI := $(dt_node_has_compat,$(DT_CHOSEN_FLASH_PARENT),$(DT_COMPAT_XSPI))
 DT_FLASH_PARENT_IS_OSPI := $(dt_node_has_compat,$(DT_CHOSEN_FLASH_PARENT),$(DT_COMPAT_OSPI))
 DT_FLASH_PARENT_IS_QSPI := $(dt_node_has_compat,$(DT_CHOSEN_FLASH_PARENT),$(DT_COMPAT_QSPI))
@@ -103,10 +106,15 @@ config USE_DT_CODE_PARTITION
 config BUILD_WITH_TFM
 	default y if TRUSTED_EXECUTION_NONSECURE
 
+ config FLASH_SIZE
+	default $(dt_node_array_prop_int,$(dt_chosen_path,$(DT_CHOSEN_Z_FLASH)),xip-config,2,K) \
+		if $(dt_chosen_has_compat,$(DT_CHOSEN_Z_FLASH),$(DT_COMPAT_JEDEC_MSPI_NOR))
+
 config FLASH_BASE_ADDRESS
 	default $(dt_node_reg_addr_hex,$(DT_CHOSEN_FLASH_PARENT),1) \
 		if $(DT_FLASH_PARENT_IS_XSPI) || $(DT_FLASH_PARENT_IS_OSPI) || $(DT_FLASH_PARENT_IS_QSPI)
-	default $(dt_chosen_reg_addr_hex,$(DT_CHOSEN_Z_FLASH))
+	default $(add_hex,$(DT_CHOSEN_FLASH_PARENT_BASE),$(DT_CHOSEN_FLASH_OFFSET)) \
+		if $(dt_chosen_has_compat,$(DT_CHOSEN_Z_FLASH),$(DT_COMPAT_JEDEC_MSPI_NOR))
 
 config STM32_APP_IN_EXT_FLASH
 	default $(DT_FLASH_PARENT_IS_XSPI) || $(DT_FLASH_CTRL_IS_XSPI_NOR)
