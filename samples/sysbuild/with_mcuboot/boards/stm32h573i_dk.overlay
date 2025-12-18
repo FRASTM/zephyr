@@ -1,0 +1,69 @@
+/*
+ * Copyright (c) 2025 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/* Replace the xspi1 by a "st,stm32-mspi-controller" compatible */
+/delete-node/ &xspi1;
+/ {
+	chosen {
+		zephyr,flash = &mx25lm51245;
+		zephyr,flash-controller = &mx25lm51245;
+		zephyr,code-partition = &slot0_partition;
+	};
+};
+
+/ {
+
+	soc {
+		xspi1: mspi@47001400 {
+			compatible = "st,stm32-xspi-controller";
+			reg = <0x47001400 0x400>, <0x90000000 DT_SIZE_M(256)>;
+			interrupts = <78 0>;
+			clock-names = "xspix", "xspi-ker";
+			clocks = <&rcc STM32_CLOCK(AHB4, 20U)>,
+				<&rcc STM32_SRC_PLL1_Q OCTOSPI1_SEL(1)>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			clock-frequency = < 0x17d7840 >;
+			op-mode = "MSPI_OP_MODE_CONTROLLER";
+			status = "okay";
+			pinctrl-0 = <&octospi1_io0_pb1 &octospi1_io1_pd12
+				&octospi1_io2_pc2 &octospi1_io3_pd13
+				&octospi1_io4_ph2 &octospi1_io5_ph3
+				&octospi1_io6_pg9 &octospi1_io7_pc0
+				&octospi1_clk_pf10 &octospi1_ncs_pg6
+				&octospi1_dqs_pb2>;
+			pinctrl-names = "default";
+
+			mx25lm51245: ospi-nor-flash@0 {
+				compatible = "jedec,mspi-nor";
+				reg = <0>;
+				size = <DT_SIZE_M(512)>; /* 512 Mbits */
+				xip-config =  <1 0 0x4000000 0>;
+				status = "okay";
+				use-4byte-addressing;
+				mspi-max-frequency = <DT_FREQ_M(50)>;
+				mspi-io-mode = "MSPI_IO_MODE_SINGLE";
+				mspi-data-rate = "MSPI_DATA_RATE_SINGLE";
+				mspi-hardware-ce-num = <0>;
+				partitions {
+					compatible = "fixed-partitions";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					slot0_partition: partition@0 {
+						label = "image-0";
+						reg = <0x00000000 DT_SIZE_M(32)>;
+					};
+					slot1_partition: partition@2000000 {
+						label = "image-1";
+						reg = <0x2000000 DT_SIZE_M(32)>;
+					};
+
+				};
+			};
+		};
+	};
+};
