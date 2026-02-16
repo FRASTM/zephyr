@@ -1,0 +1,42 @@
+# STM32H5F5J DISCOVERY KIT board configuration
+#
+# Copyright (c) 2026 STMicroelectronics
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+if BOARD_STM32H5F5J_DK
+
+if NETWORKING
+
+configdefault NET_L2_ETHERNET
+	default y
+
+endif # NETWORKING
+
+if DISK_DRIVER_SDMMC
+
+configdefault SDMMC_STM32_CLOCK_CHECK
+	default n
+
+endif # DISK_DRIVER_SDMMC
+
+if DISPLAY
+
+choice ST7789V_PIXEL_FORMAT
+	default ST7789V_RGB565X
+endchoice
+
+# Required to enable LCD backlight
+configdefault REGULATOR
+	default y
+
+configdefault INPUT
+	default y if LVGL
+
+configdefault I2C_STM32_V2_TIMING
+	default y if INPUT
+
+endif # DISPLAY
+
+endif # BOARD_STM32H5F5J_DK
