@@ -517,6 +517,19 @@ static int dma_stm32_configure(const struct device *dev,
 
 	stream->source_periph = (stream->direction == PERIPHERAL_TO_MEMORY);
 
+#if defined(LL_DMA_DEST_DATAWIDTH_DOUBLEWORD) || defined(LL_DMA_SRC_DATAWIDTH_DOUBLEWORD)
+	if (dma == HPDMA1) {
+		LL_DMA_SetSrcDataWidth(dma, dma_stm32_id_to_stream(id), LL_DMA_SRC_DATAWIDTH_DOUBLEWORD);
+		LL_DMA_SetDestDataWidth(dma, dma_stm32_id_to_stream(id), LL_DMA_DEST_DATAWIDTH_DOUBLEWORD);
+		if (id < 12) {
+			/* HPDMA1channel 0 - 11  have a FIFO of 16bytes : 2 double words */
+			LL_DMA_ConfigBurstLength(dma, dma_stm32_id_to_stream(id), 2, 2);
+		} else {
+			/* HPDMA1channel 12 - 15  have a FIFO of 64bytes : 8 double words */
+			LL_DMA_ConfigBurstLength(dma, dma_stm32_id_to_stream(id), 8, 8);
+		}
+	} else {
+#endif /* DATAWIDTH_DOUBLEWORD */
 	/* Set the data width, when source_data_size equals dest_data_size */
 	int index = find_lsb_set(config->source_data_size) - 1;
 
@@ -524,6 +537,9 @@ static int dma_stm32_configure(const struct device *dev,
 
 	index = find_lsb_set(config->dest_data_size) - 1;
 	LL_DMA_SetDestDataWidth(dma, dma_stm32_id_to_stream(id), table_dst_size[index]);
+#if defined(LL_DMA_DEST_DATAWIDTH_DOUBLEWORD) || defined(LL_DMA_SRC_DATAWIDTH_DOUBLEWORD)
+	}
+#endif /* DATAWIDTH_DOUBLEWORD */
 
 	LL_DMA_SetBlkDataLength(dma, dma_stm32_id_to_stream(id), config->head_block->block_size);
 
@@ -650,6 +666,7 @@ static int dma_stm32_suspend(const struct device *dev, uint32_t id)
 	const struct dma_stm32_config *config = dev->config;
 	DMA_TypeDef *dma = (DMA_TypeDef *)(config->base);
 	const struct dma_stm32_stream *stream = &config->streams[id];
+	volatile uint32_t susp_flag;
 
 	if (id >= config->max_streams) {
 		return -EINVAL;
@@ -660,8 +677,8 @@ static int dma_stm32_suspend(const struct device *dev, uint32_t id)
 	/* It's not enough to wait for the SUSPF bit with LL_DMA_IsActiveFlag_SUSP */
 	do {
 		k_busy_wait(800); /* A delay is needed (800us is valid) */
-	} while (LL_DMA_IsActiveFlag_SUSP(dma, dma_stm32_id_to_stream(id)) != 1 &&
-			stream->busy == true);
+		susp_flag = LL_DMA_IsActiveFlag_SUSP(dma, dma_stm32_id_to_stream(id));
+	} while ((stream->busy == true) && (susp_flag != 1));
 
 	/* Do not Reset the channel to allow resuming later */
 	return 0;
