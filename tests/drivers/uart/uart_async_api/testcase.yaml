@@ -131,6 +131,8 @@ tests:
     platform_allow:
       - nucleo_f746zg
       - nucleo_h723zg
+      - nucleo_h7s3l8
+      - stm32h7s78_dk
     extra_args:
       - EXTRA_CONF_FILE=stm32_nocache_mem.conf
   drivers.uart.async_api.nocache_mem_dt.nucleo_f746zg:
