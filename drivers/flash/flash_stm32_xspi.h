@@ -83,7 +83,6 @@ struct flash_stm32_xspi_config {
 	const struct stm32_pclken pclken_ker;
 	const struct stm32_pclken pclken_mgr;
 	irq_config_func_t irq_config;
-	size_t flash_size;
 	uint32_t max_frequency;
 	int data_mode; /* SPI or QSPI or OSPI */
 	int data_rate; /* DTR or STR */
@@ -112,6 +111,8 @@ struct flash_stm32_xspi_data {
 	uint16_t page_size;
 	/* Address width in bytes */
 	uint8_t address_width;
+	/* Dynamic Memory size in Bytes given by the Flash SFDP */
+	size_t flash_size; /* in Bytes */
 	/* Read operation dummy cycles */
 	uint8_t read_dummy;
 	uint32_t read_opcode;

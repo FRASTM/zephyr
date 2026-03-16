@@ -361,8 +361,8 @@ static int xspi_read_sfdp(const struct device *dev, off_t addr, void *data,
 static bool xspi_address_is_valid(const struct device *dev, off_t addr,
 				  size_t size)
 {
-	const struct flash_stm32_xspi_config *dev_cfg = dev->config;
-	size_t flash_size = dev_cfg->flash_size;
+	struct flash_stm32_xspi_data *data = dev->data;
+	size_t flash_size = data->flash_size;
 
 	return (addr >= 0) && ((uint64_t)addr + (uint64_t)size <= flash_size);
 }
@@ -1028,8 +1028,8 @@ static int flash_stm32_xspi_erase(const struct device *dev, off_t addr,
 	}
 
 	/* Maximise erase size : means the complete chip */
-	if (size > dev_cfg->flash_size) {
-		size = dev_cfg->flash_size;
+	if (size > dev_data->flash_size) {
+			size = dev_data->flash_size;
 	}
 
 	if (!xspi_address_is_valid(dev, addr, size)) {
@@ -1038,7 +1038,7 @@ static int flash_stm32_xspi_erase(const struct device *dev, off_t addr,
 		return -EINVAL;
 	}
 
-	if (((size % SPI_NOR_SECTOR_SIZE) != 0) && (size < dev_cfg->flash_size)) {
+	if (((size % SPI_NOR_SECTOR_SIZE) != 0) && (size < dev_data->flash_size)) {
 		LOG_ERR("Error: wrong sector size 0x%x", size);
 		return -ENOTSUP;
 	}
@@ -1092,7 +1092,7 @@ static int flash_stm32_xspi_erase(const struct device *dev, off_t addr,
 			break;
 		}
 
-		if (size == dev_cfg->flash_size) {
+		if (size == dev_data->flash_size) {
 			/* Chip erase */
 			LOG_DBG("Chip Erase");
 
@@ -1104,7 +1104,7 @@ static int flash_stm32_xspi_erase(const struct device *dev, off_t addr,
 			/* Full chip erase (Bulk) command */
 			xspi_send_cmd(dev, &cmd_erase);
 
-			size -= dev_cfg->flash_size;
+			size -= dev_data->flash_size;
 			/* Chip (Bulk) erase started, wait until WEL becomes 0 */
 			ret = stm32_xspi_mem_erased(dev);
 			if (ret != 0) {
@@ -1588,9 +1588,9 @@ static void flash_stm32_xspi_pages_layout(const struct device *dev,
 
 static int flash_stm32_xspi_get_size(const struct device *dev, uint64_t *size)
 {
-	const struct flash_stm32_xspi_config *dev_cfg = dev->config;
+	struct flash_stm32_xspi_data *dev_data = dev->data;
 
-	*size = (uint64_t)dev_cfg->flash_size;
+	*size = (uint64_t)dev_data->flash_size;
 
 	return 0;
 }
@@ -1613,9 +1613,8 @@ static DEVICE_API(flash, flash_stm32_xspi_driver_api) = {
 #if defined(CONFIG_FLASH_PAGE_LAYOUT)
 static int setup_pages_layout(const struct device *dev)
 {
-	const struct flash_stm32_xspi_config *dev_cfg = dev->config;
 	struct flash_stm32_xspi_data *data = dev->data;
-	const size_t flash_size = dev_cfg->flash_size;
+	const size_t flash_size = data->flash_size
 	uint32_t layout_page_size = data->page_size;
 	uint8_t value = 0;
 	int rv = 0;
@@ -1878,8 +1877,19 @@ static int spi_nor_process_bfp(const struct device *dev,
 	struct jesd216_instr read_instr = { 0 };
 	struct jesd216_bfp_dw15 dw15;
 
-	if (flash_size != dev_cfg->flash_size) {
+		/* Flash size from the DeviceTree and from the flash SFDP table should match */
+		if (flash_size != data->flash_size) {
 		LOG_DBG("Unexpected flash size: %u", flash_size);
+		data->flash_size = flash_size;
+		/*
+		 * If both values differ, the size given by the flash itself (SFDP),
+		 * is taken as the valid one.
+		 * Memory size in Bits given by the DeviceTree
+		 */
+		data->hxspi.Init.MemorySize = find_lsb_set(flash_size) - 2;
+		/* The controller DCR1 should be re-programmed with actual DEVSIZE */
+		HAL_XSPI_SetDeviceSize(&data->hxspi, flash_size);
+
 	}
 
 	LOG_DBG("%s: %u MiBy flash", dev->name, (uint32_t)(flash_size >> 20));
@@ -2182,7 +2192,7 @@ static int flash_stm32_xspi_init(const struct device *dev)
 	/* Initialize XSPI HAL structure completely */
 	dev_data->hxspi.Init.ClockPrescaler = prescaler;
 	/* The stm32 hal_xspi driver does not reduce DEVSIZE before writing the DCR1 */
-	dev_data->hxspi.Init.MemorySize = find_lsb_set(dev_cfg->flash_size) - 2;
+	dev_data->hxspi.Init.MemorySize = find_lsb_set(dev_data->flash_size) - 2;
 #if defined(XSPI_DCR2_WRAPSIZE)
 	dev_data->hxspi.Init.WrapSize = HAL_XSPI_WRAP_NOT_SUPPORTED;
 #endif /* XSPI_DCR2_WRAPSIZE */
@@ -2432,11 +2442,11 @@ static int flash_stm32_xspi_init(const struct device *dev)
 	}
 	LOG_INF("Memory-mapped NOR-flash at 0x%lx (0x%x bytes)",
 		(long)(dev_cfg->mem_map_based_address),
-		dev_cfg->flash_size);
+		dev_data->flash_size);
 #else
 	LOG_INF("NOR external-flash at 0x%lx (0x%x bytes)",
 		(long)(dev_cfg->mem_map_based_address),
-		dev_cfg->flash_size);
+		dev_data->flash_size);
 #endif /* CONFIG_STM32_MEMMAP*/
 	return 0;
 }
@@ -2545,7 +2555,6 @@ static int flash_stm32_xspi_init(const struct device *dev)
 		.mem_map_based_address = DT_REG_ADDR_BY_IDX(STM32_XSPI_NODE(inst), 1),		\
 												\
 		/* Properties of the flash device */						\
-		.flash_size = DT_INST_PROP(inst, size) / 8,			/* In Bytes */	\
 		.max_frequency = DT_INST_PROP(inst, ospi_max_frequency),			\
 		.data_mode = DT_INST_PROP(inst, spi_bus_width),			/* SPI or OPI */\
 		.data_rate = DT_INST_PROP(inst, data_rate),			/* DTR or STR */\
@@ -2562,6 +2571,7 @@ static int flash_stm32_xspi_init(const struct device *dev)
 			.Instance = (XSPI_TypeDef *)DT_REG_ADDR(STM32_XSPI_NODE(inst)),		\
 			.Init = {								\
 				.FifoThresholdByte = STM32_XSPI_FIFO_THRESHOLD,			\
+				.flash_size = DT_INST_PROP_OR(0, size, MB(256 * 8)) / 8, /* In Bytes */	\
 				.SampleShifting = (DT_PROP(STM32_XSPI_NODE(inst), ssht_enable)	\
 						? HAL_XSPI_SAMPLE_SHIFT_HALFCYCLE		\
 						: HAL_XSPI_SAMPLE_SHIFT_NONE),			\
