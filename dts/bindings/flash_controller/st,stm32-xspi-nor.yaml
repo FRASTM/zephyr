@@ -1,4 +1,4 @@
-# Copyright (c) 2021 - 2024 STMicroelectronics
+# Copyright (c) 2021 - 2026 STMicroelectronics
 # SPDX-License-Identifier: Apache-2.0
 
 description: |
@@ -12,10 +12,11 @@ include:
       - spi-bus-width
       - data-rate
       - sfdp-bfp
+      - size
 properties:
   size:
-    required: true
-    description: Flash Memory size in bits
+    type: int
+    description: Flash Memory size in bits. If not set, rely on the NOR SFDP table.
   spi-bus-width:
     type: int
     required: true
