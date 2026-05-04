@@ -1,0 +1,22 @@
+/ {
+	aliases {
+		rtc = &rtc;
+	};
+};
+
+&clk_lse {
+    status = "okay";
+};
+
+&clk_lsi {
+    status = "okay";
+};
+
+&rtc {
+    status = "okay";
+    clocks = <&rcc STM32_CLOCK(APB3, 21)>,
+/*		 <&rcc STM32_SRC_LSI RTC_SEL(2)>;*/
+		 <&rcc STM32_SRC_LSE RTC_SEL(1)>;
+    clock-names = "device" , "bus";
+};
+
