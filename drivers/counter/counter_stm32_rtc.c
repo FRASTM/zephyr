@@ -463,6 +463,9 @@ tick_t rtc_stm32_read(const struct device *dev)
 	ARG_UNUSED(dev);
 
 	do {
+
+printk("Call :%s\n", __func__);
+		
 		/* read date, time and subseconds and relaunch if a day increment occurred
 		 * while doing so as it will result in an erroneous result otherwise
 		 */
@@ -494,7 +497,7 @@ tick_t rtc_stm32_read(const struct device *dev)
 	now.tm_hour = bcd2bin(STM32_RTC_GET_HOUR(rtc_time));
 	now.tm_min = bcd2bin(STM32_RTC_GET_MINUTE(rtc_time));
 	now.tm_sec = bcd2bin(STM32_RTC_GET_SECOND(rtc_time));
-
+printk("now.tm_sec:%d\n", now.tm_sec);
 	ts = timeutil_timegm(&now);
 
 	/* Return number of seconds since RTC init */
@@ -528,6 +531,9 @@ tick_t rtc_stm32_read(const struct device *dev)
 
 static int rtc_stm32_get_value(const struct device *dev, uint32_t *ticks)
 {
+
+printk("RTC get value\n");
+
 	*ticks = (uint32_t)rtc_stm32_read(dev);
 	return 0;
 }
@@ -793,6 +799,8 @@ static int rtc_stm32_init(const struct device *dev)
 		LOG_ERR("clock op failed");
 		return -EIO;
 	}
+
+	printk("RTC init\n");
 
 	/* Enable Backup access */
 	z_stm32_hsem_lock(CFG_HW_RCC_SEMID, HSEM_LOCK_DEFAULT_RETRY);

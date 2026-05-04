@@ -1,0 +1,5 @@
+sample:
+  name: RTC usages example
+tests:
+  sample.board.stm32.rtc:
+    tags: board

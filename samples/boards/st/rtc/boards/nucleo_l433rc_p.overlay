@@ -1,0 +1,20 @@
+/ {
+    chosen {
+        zephyr,rtc = &rtc;
+    };
+
+	aliases {
+		rtc = &rtc;
+	};
+};
+
+&clk_lse {
+    status = "okay";
+};
+
+&rtc {
+    status = "okay";
+    clocks = <&rcc STM32_CLOCK_BUS_APB1 1>, <&rcc STM32_SRC_LSE RTC_SEL(1)>;
+    clock-names = "device" , "bus";
+};
+
