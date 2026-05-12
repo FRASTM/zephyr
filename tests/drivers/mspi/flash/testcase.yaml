@@ -17,6 +17,7 @@ tests:
       - native_sim
       - apollo3p_evb
       - apollo510_evb
+      - b_u585i_iot02a
     integration_platforms:
       - native_sim
       - apollo3p_evb
