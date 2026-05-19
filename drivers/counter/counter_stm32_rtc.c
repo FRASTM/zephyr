@@ -461,7 +461,7 @@ tick_t rtc_stm32_read(const struct device *dev)
 	uint32_t rtc_subsecond;
 #endif /* CONFIG_COUNTER_RTC_STM32_SUBSECONDS */
 	ARG_UNUSED(dev);
-
+printk("Call :%s\n", __func__);
 	do {
 		/* read date, time and subseconds and relaunch if a day increment occurred
 		 * while doing so as it will result in an erroneous result otherwise
@@ -494,7 +494,7 @@ tick_t rtc_stm32_read(const struct device *dev)
 	now.tm_hour = bcd2bin(STM32_RTC_GET_HOUR(rtc_time));
 	now.tm_min = bcd2bin(STM32_RTC_GET_MINUTE(rtc_time));
 	now.tm_sec = bcd2bin(STM32_RTC_GET_SECOND(rtc_time));
-
+printk("now.tm_sec:%d\n", now.tm_sec);
 	ts = timeutil_timegm(&now);
 
 	/* Return number of seconds since RTC init */

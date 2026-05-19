@@ -668,7 +668,7 @@ static int rtc_stm32_get_time(const struct device *dev, struct rtc_time *timeptr
 	const struct rtc_stm32_config *cfg = dev->config;
 	uint32_t rtc_subsecond;
 #endif /* HW_SUBSECOND_SUPPORT */
-
+printk("Call :%s\n", __func__);
 	if (timeptr == NULL) {
 		LOG_ERR("NULL rtc_time pointer");
 		return -EINVAL;
@@ -738,7 +738,7 @@ static int rtc_stm32_get_time(const struct device *dev, struct rtc_time *timeptr
 	/* unknown values */
 	timeptr->tm_yday  = -1;
 	timeptr->tm_isdst = -1;
-
+printk("now.tm_sec:%d\n", timeptr->tm_sec);
 	/* __LL_RTC_GET_YEAR(rtc_date)is the real year (from 2000) */
 	LOG_DBG("Calendar get : %d/%d/%d - %dh%dm%ds",
 		timeptr->tm_mday,
