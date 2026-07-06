@@ -1504,6 +1504,10 @@ static int mspi_stm32_ospi_pm_action(const struct device *dev, enum pm_device_ac
 		irq_enable(DT_INST_IRQN(index));                                                   \
 	}
 
+
+#define MSPI_STM32_MEMTYPE(idx) \
+	CONCAT(HAL_OSPI_MEMTYPE_, DT_INST_STRING_UPPER_TOKEN(idx, st_mem_type))
+
 #define MSPI_STM32_INIT(index)                                                                     \
 	BUILD_ASSERT(OSPI_INST_NUM(index) != 0,                                                    \
 		     "Unsupported OSPI instance: DTS node must be octospi1 or octospi2");          \
@@ -1545,6 +1549,8 @@ static int mspi_stm32_ospi_pm_action(const struct device *dev, enum pm_device_ac
 				.ClockMode = HAL_OSPI_CLOCK_MODE_0,                                \
 				.ChipSelectBoundary = DT_INST_PROP(index, st_csbound),             \
 				.FreeRunningClock = HAL_OSPI_FREERUNCLK_DISABLE,                   \
+				.MemoryType = MSPI_STM32_MEMTYPE(index),  \
+				.DeviceSize = 0x19,                       \
 			},                                                                         \
 		},                                                                                 \
 		.memmap_base_addr = DT_INST_REG_ADDR_BY_IDX(index, 1),                             \
