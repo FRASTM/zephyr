@@ -79,6 +79,18 @@
 
 LOG_MODULE_REGISTER(ospi_stm32, CONFIG_MSPI_LOG_LEVEL);
 
+static inline void ospi_lock_thread(const struct device *dev)
+{
+	struct mspi_stm32_data *dev_data = dev->data;
+	k_sem_take(&dev_data->sem, K_FOREVER);
+}
+
+static inline void ospi_unlock_thread(const struct device *dev)
+{
+	struct mspi_stm32_data *dev_data = dev->data;
+	k_sem_give(&dev_data->sem);
+}
+
 static int mspi_stm32_ospi_context_lock(struct mspi_stm32_context *ctx,
 					const struct mspi_dev_id *req, const struct mspi_xfer *xfer,
 					bool lockon)
@@ -275,7 +287,7 @@ static int mspi_stm32_ospi_memmap_on(const struct device *controller)
 		return -EIO;
 	}
 
-	LOG_INF("Memory mapped mode enabled");
+	LOG_INF("Memory mapped mode enabled at 0x%x", dev_data->memmap_base_addr);
 
 	return 0;
 }
@@ -284,28 +296,30 @@ static int mspi_stm32_ospi_memmap_read(const struct device *dev,
 				       const struct mspi_xfer_packet *packet)
 {
 	struct mspi_stm32_data *dev_data = dev->data;
+	uintptr_t addr = dev_data->memmap_base_addr + packet->address;
 	int ret = 0;
 
+	ospi_lock_thread(dev);
 	if (!mspi_stm32_ospi_is_memorymap(dev)) {
 		ret = mspi_stm32_ospi_memmap_on(dev);
 		if (ret != 0) {
 			LOG_ERR("Failed to set memory-mapped before read");
+			ospi_unlock_thread(dev);
 			return ret;
 		}
 		k_usleep(50);
 	}
+	ospi_unlock_thread(dev);
+
 #ifdef CONFIG_DCACHE
-	uint32_t addr = dev_data->memmap_base_addr + packet->address;
 	uint32_t size = packet->num_bytes;
 
-	__ASSERT_NO_MSG(IS_ALIGNED(addr, CONFIG_DCACHE_LINE_SIZE) &&
-			IS_ALIGNED(size, CONFIG_DCACHE_LINE_SIZE));
+	__ASSERT_NO_MSG(IS_ALIGNED(addr, CONFIG_DCACHE_LINE_SIZE));
 
 	sys_cache_data_invd_range((void *)addr, size);
 #endif
-	memcpy(packet->data_buf, (uint8_t *)dev_data->memmap_base_addr + packet->address,
-	       packet->num_bytes);
-
+	memcpy(packet->data_buf, (uint8_t *)addr, packet->num_bytes);
+	LOG_INF("Memory-mapped read from 0x%08lx, len %u", addr, packet->num_bytes);
 	return ret;
 }
 
@@ -313,23 +327,27 @@ static int mspi_stm32_ospi_memmap_write(const struct device *dev,
 					const struct mspi_xfer_packet *packet)
 {
 	struct mspi_stm32_data *dev_data = dev->data;
+	uintptr_t addr = dev_data->memmap_base_addr + packet->address;
 	int ret = 0;
 
+	ospi_lock_thread(dev);
 	if (!mspi_stm32_ospi_is_memorymap(dev)) {
 		ret = mspi_stm32_ospi_memmap_on(dev);
 		if (ret != 0) {
 			LOG_ERR("Failed to set memory-mapped before write");
+			ospi_unlock_thread(dev);
 			return ret;
 		}
 		k_usleep(50);
 	}
+	ospi_unlock_thread(dev);
 
 	/* Write enable and status polling are performed by the flash
 	 * driver through separate command packets, which are serviced
 	 * in indirect mode.
 	 */
-	memcpy((uint8_t *)dev_data->memmap_base_addr + packet->address,
-	       packet->data_buf, packet->num_bytes);
+	LOG_INF("Memory-mapped write from 0x%08lx, len %u", addr, packet->num_bytes);
+	memcpy((uint8_t *)addr, packet->data_buf, packet->num_bytes);
 
 #ifdef CONFIG_DCACHE
 	sys_cache_data_flush_range(
@@ -340,7 +358,7 @@ static int mspi_stm32_ospi_memmap_write(const struct device *dev,
 	return ret;
 }
 
-static int mspi_stm32_ospi_abort_memmap(const struct device *dev)
+static int mspi_stm32_ospi_abort_memmap_if_enabled(const struct device *dev)
 {
 	struct mspi_stm32_data *dev_data = dev->data;
 	int ret = 0;
@@ -370,10 +388,11 @@ static int mspi_stm32_ospi_access(const struct device *dev, const struct mspi_xf
 		if (packet->dir == MSPI_RX) {
 			return mspi_stm32_ospi_memmap_read(dev, packet);
 		}
-		if (dev_data->xip_cfg.permission) {
+		if (!dev_data->xip_cfg.permission) {
 			return mspi_stm32_ospi_memmap_write(dev, packet);
 		}
-	ret = mspi_stm32_ospi_abort_memmap(dev);
+	}
+	ret = mspi_stm32_ospi_abort_memmap_if_enabled(dev);
 	if (ret != 0) {
 		return ret;
 	}
@@ -536,10 +555,13 @@ static int mspi_stm32_ospi_status_reg(const struct device *controller, const str
 	int ret = 0;
 	struct mspi_stm32_data *dev_data = controller->data;
 
-	ret = mspi_stm32_ospi_abort_memmap(controller);
+	ospi_lock_thread(controller);
+	ret = mspi_stm32_ospi_abort_memmap_if_enabled(controller);
 	if (ret != 0) {
+		ospi_unlock_thread(controller);
 		return ret;
 	}
+	ospi_unlock_thread(controller);
 
 	struct mspi_stm32_context *ctx = &dev_data->ctx;
 
@@ -829,6 +851,7 @@ static int mspi_stm32_ospi_xip_config(const struct device *controller,
 	(void)pm_device_runtime_get(controller);
 	/* Prevent the clocks to be stopped during the request */
 	pm_policy_state_lock_get(PM_STATE_SUSPEND_TO_IDLE, PM_ALL_SUBSTATES);
+	ospi_lock_thread(controller);
 
 	if (!xip_cfg->enable) {
 		/* This is for aborting */
@@ -842,6 +865,7 @@ static int mspi_stm32_ospi_xip_config(const struct device *controller,
 		LOG_INF("XIP configured %d", xip_cfg->enable);
 	}
 
+	ospi_unlock_thread(controller);
 	pm_policy_state_lock_put(PM_STATE_SUSPEND_TO_IDLE, PM_ALL_SUBSTATES);
 	(void)pm_device_runtime_put(controller);
 
@@ -1321,6 +1345,7 @@ static int mspi_stm32_ospi_config(const struct mspi_dt_spec *spec)
 	if (config->re_init) {
 		k_mutex_unlock(&dev_data->lock);
 	}
+	k_sem_init(&dev_data->sem, 1, 1);
 end:
 	pm_policy_state_lock_put(PM_STATE_SUSPEND_TO_IDLE, PM_ALL_SUBSTATES);
 	(void)pm_device_runtime_put(spec->bus);
