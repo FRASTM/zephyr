@@ -377,6 +377,19 @@ struct mspi_ce_control {
 };
 
 /**
+ * @name MSPI transfer packet flags
+ * @{
+ */
+/**
+ * Packet accesses the device memory array (data read or write), as
+ * opposed to a command or register access. Controllers capable of
+ * memory-mapped access may service such packets through the mapped
+ * region. Controllers ignore flags they do not support.
+ */
+#define MSPI_PACKET_FLAG_MEM_ACCESS BIT(0)
+/** @} */
+
+/**
  * @brief MSPI peripheral xfer packet format
  */
 struct mspi_xfer_packet {
@@ -384,6 +397,8 @@ struct mspi_xfer_packet {
 	enum mspi_xfer_direction    dir;
 	/** @brief  Bus event callback masks     */
 	enum mspi_bus_event_cb_mask cb_mask;
+	/** @brief  Packet flags (MSPI_PACKET_FLAG_*) */
+	uint32_t                    flags;
 	/** @brief  Transfer command             */
 	uint32_t                    cmd;
 	/** @brief  Transfer Address             */

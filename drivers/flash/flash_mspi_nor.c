@@ -420,6 +420,7 @@ static int api_read(const struct device *dev, off_t addr, void *dest,
 		}
 
 		set_up_xfer_with_addr(dev, MSPI_RX, addr, dev_config->data_xfer_mode);
+		dev_data->packet.flags = MSPI_PACKET_FLAG_MEM_ACCESS;
 		dev_data->xfer.rx_dummy = get_rx_dummy(dev);
 		dev_data->packet.data_buf  = dest;
 		dev_data->packet.num_bytes = to_read;
@@ -473,6 +474,7 @@ static int api_write(const struct device *dev, off_t addr, const void *src,
 		}
 
 		set_up_xfer_with_addr(dev, MSPI_TX, addr, dev_config->data_xfer_mode);
+		dev_data->packet.flags = MSPI_PACKET_FLAG_MEM_ACCESS;
 		dev_data->packet.data_buf  = (uint8_t *)src;
 		dev_data->packet.num_bytes = to_write;
 		rc = perform_xfer(dev, dev_data->cmd_info.pp_cmd);
