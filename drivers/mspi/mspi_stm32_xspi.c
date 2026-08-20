@@ -1616,6 +1616,13 @@ static int mspi_stm32_xspi_memmap_config(const struct device *controller,
 		LOG_ERR("dev_id don't match");
 		return -ESTALE;
 	}
+
+	/* Control the memmap parameters : size and address_offset */
+	if ((memmap_cfg->address_offset + memmap_cfg->size) > dev_data->memmap_base_size) {
+		LOG_ERR("Memory Mapped out of area");
+		return -EIO;
+	}
+
 	(void)pm_device_runtime_get(controller);
 	/* Prevent the clocks to be stopped during the request */
 	pm_policy_state_lock_get(PM_STATE_SUSPEND_TO_IDLE, PM_ALL_SUBSTATES);
@@ -2086,6 +2093,7 @@ static int mspi_stm32_xspi_pm_action(const struct device *dev, enum pm_device_ac
 	};                                                                                        \
 	static struct mspi_stm32_data mspi_stm32_dev_data_##index = {                             \
 		.memmap_base_addr = DT_INST_REG_ADDR_BY_IDX(index, 1),                            \
+		.memmap_base_size = DT_INST_REG_SIZE_BY_IDX(index, 1),                            \
 		.lock = Z_MUTEX_INITIALIZER(mspi_stm32_dev_data_##index.lock),                    \
 		.sync = Z_SEM_INITIALIZER(mspi_stm32_dev_data_##index.sync, 0, 1),                \
 		.dev_cfg = {0},                                                                   \
