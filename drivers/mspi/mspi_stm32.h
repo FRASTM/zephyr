@@ -184,6 +184,7 @@ union mspi_stm32_handle {
 struct mspi_stm32_data {
 	union mspi_stm32_handle hmspi;
 	uint32_t memmap_base_addr;
+	uint32_t memmap_base_size;
 	struct mspi_stm32_context ctx;
 	const struct mspi_dev_id *dev_id;
 	struct k_mutex lock;
