@@ -987,6 +987,13 @@ static int read_write_in_memory_map_mode(const struct device *dev,
 		return -EIO;
 	}
 
+	/* Control the packet parameters : offset and size within the dev_data->memmap_cfg */
+	if ((packet->address > dev_data->memmap_cfg.size) ||
+		(packet->address + packet->num_bytes > dev_data->memmap_cfg.size)) {
+			LOG_ERR("Memory Mapped access out of area");
+			return -EIO;
+	}
+
 	xspi_lock_thread(dev);
 	if (!mspi_stm32_xspi_is_memorymap(dev)) {
 		ret = mspi_stm32_xspi_memmap_on(dev);
@@ -1002,12 +1009,6 @@ static int read_write_in_memory_map_mode(const struct device *dev,
 	uintptr_t mmap_addr = dev_data->memmap_base_addr +
 		dev_data->memmap_cfg.address_offset +
 		packet->address;
-
-	/* TODO :
-	 * - check this mmap_addr does not exceed the max_mmap_addr = dev_data->memmap_base_addr +
-	 * dev_data->memmap_cfg.address_offset + dev_data->memmap_cfg.size
-	 * - check that the mmap_addr + packet->num_bytes does not exceed the max_mmap_addr
-	 */
 
 	if (packet->dir == MSPI_RX) {
 #ifdef CONFIG_DCACHE
