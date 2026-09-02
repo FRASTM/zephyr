@@ -7,6 +7,10 @@
 
 #define DT_DRV_COMPAT st_stm32_ospi_nor
 
+#if defined(CONFIG_SOC_SERIES_STM32U5X)
+#warning "This driver will be deprecated in favor of its MSPI alternative following v4.5.0"
+#endif /* CONFIG_SOC_SERIES_STM32U5X */
+
 #include <errno.h>
 #include <zephyr/kernel.h>
 #include <zephyr/toolchain.h>
