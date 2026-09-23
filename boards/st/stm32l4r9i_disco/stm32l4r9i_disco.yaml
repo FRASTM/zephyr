@@ -18,5 +18,6 @@ supported:
   - pwm
   - rtc
   - spi
+  - mspi
   - uart
   - usb_device
