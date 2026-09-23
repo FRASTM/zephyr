@@ -306,6 +306,8 @@ zephyr_udc0: &usbotg_fs {
 };
 
 &octospi2 {
+	compatible = "st,stm32-ospi-controller";
+	op-mode = "MSPI_OP_MODE_CONTROLLER";
 	status = "okay";
 	pinctrl-0 = <&octospim_p2_clk_pi6 &octospim_p2_ncs_pg12
 		     &octospim_p2_io0_pi11 &octospim_p2_io1_pi10
@@ -315,48 +317,56 @@ zephyr_udc0: &usbotg_fs {
 		     &octospim_p2_dqs_pg15>;
 	pinctrl-names = "default";
 
-	mx25lm51245: ospi-nor-flash@0 {
+	clock-frequency = <DT_FREQ_M(50)>;
+	st,dqs-port = <2>;
+
+	dmas = <&dma1 0 41 STM32_DMA_PERIPH_RX>; /* request 41 for OCTOSPI2 */
+	dma-names = "tx_rx";
+
+
+	ext_flash_ctrl: nor-flash-controller@0 {
 		status = "okay";
-		compatible = "st,stm32-ospi-nor";
+		compatible = "st,nor", "mxicy,mx25u", "jedec,nor";
 		reg = <0>;
 		size = <DT_SIZE_M(512)>; /* 512 Megabits */
-		ospi-max-frequency = <DT_FREQ_M(25)>;
-		spi-bus-width = <OSPI_OPI_MODE>;
-		data-rate = <OSPI_STR_TRANSFER>;
-		four-byte-opcodes;
-		sfdp-bfp = [53 46 44 50 06 01 02 ff
-			    00 06 01 10 30 00 00 ff
-			    c2 00 01 04 10 01 00 ff
-			    84 00 01 02 c0 00 00 ff
-			    00 00 00 00 00 00 00 00
-			    00 00 00 00 00 00 00 00
-			    e5 20 fb ff ff ff ff 1f
-			    44 eb 08 6b 08 3b 04 bb
-			    fe ff ff ff ff ff 00 ff
-			    ff ff 44 eb 0c 20 0f 52
-			    10 d8 00 ff d6 49 c5 00
-			    81 df 04 e3 44 03 67 38
-			    30 b0 30 b0 f7 bd d5 5c
-			    4a 9e 29 ff f0 50 f9 85
-			    00 00 00 00 00 00 00 00
-			    00 00 00 00 00 00 00 00
-			    00 00 00 00 00 00 00 00
-			    00 00 00 00 00 00 00 00
-			    00 00 00 00 00 00 00 00
-			    00 00 00 00 00 00 00 00
-			    00 00 00 00 00 00 00 00
-			    00 00 00 00 00 00 00 00
-			    00 00 00 00 00 00 00 00
-			    00 00 00 00 00 00 00 00
-			    7f ef ff ff 21 5c dc ff];
+		mspi-max-frequency = <DT_FREQ_M(50)>;
+		mspi-io-mode = "MSPI_IO_MODE_OCTAL";
+		mspi-data-rate = "MSPI_DATA_RATE_SINGLE";
+		mspi-hardware-ce-num = <0>;
+		read-command = <0xec13>;                /* ReaD 4Bytes */
+		command-length = "INSTR_2_BYTE";
+		write-command = <0x12ed>; /* WRite 4Bytes */
+		rx-dummy = <20>;
+		st,mem-type = "macronix";
 
-		partitions {
-			compatible = "fixed-partitions";
+		/* Allow Rd and Wr in MemoryMapped mode (permission = 0) */
+		memmap-config = <1 0 DT_SIZE_M(64) 0>;
+
+		/* external flash mapping */
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x0 0x70000000 DT_SIZE_M(64)>; /* Ext Flash mem-mapped to 0x70000000 */
+
+		status = "okay";
+
+		ext_flash: mx25lm51245: ext-flash@0 {
+			compatible = "soc-nv-flash";
+			reg = <0x0 DT_SIZE_M(64)>;
+			write-block-size = <1>;
+			erase-block-size = <DT_SIZE_K(4)>;
 			#address-cells = <1>;
 			#size-cells = <1>;
+			ranges = <0x0 0x0 DT_SIZE_M(64)>;
 
-			partition@0 {
-				reg = <0x00000000 DT_SIZE_M(64)>;
+			partitions {
+				compatible = "fixed-partitions";
+				#address-cells = <1>;
+				#size-cells = <1>;
+
+				store_partition: partition@0 {
+					label = "store";
+					reg = <0x0 DT_SIZE_M(64)>;
+				};
 			};
 		};
 	};

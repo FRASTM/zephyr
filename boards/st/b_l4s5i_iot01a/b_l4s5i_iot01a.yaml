@@ -20,4 +20,5 @@ supported:
   - spi
   - vl53l0x
   - watchdog
+  - mspi
 vendor: st

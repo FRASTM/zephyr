@@ -2,6 +2,10 @@
 
 # keep first
 board_runner_args(stm32cubeprogrammer "--port=swd" "--reset-mode=hw")
+if(CONFIG_FLASH_STM32_NOR_MEMMAP OR (CONFIG_XIP AND CONFIG_BOOTLOADER_MCUBOOT))
+  board_runner_args(stm32cubeprogrammer "--extload=MX25LM51245G_STM32L4R9I-DISCO.stldr")
+endif()
+
 board_runner_args(jlink "--device=STM32L4R9AI" "--speed=4000")
 
 # keep first
