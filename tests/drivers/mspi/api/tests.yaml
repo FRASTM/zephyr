@@ -36,6 +36,8 @@ tests:
     platform_allow:
       - stm32h573i_dk
       - b_u585i_iot02a
+      - stm32l4r9i_disco
+      - b_l4s5i_iot01a
   drivers.mspi.api.xec:
     tags:
       - drivers

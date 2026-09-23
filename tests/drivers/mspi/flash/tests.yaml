@@ -21,6 +21,8 @@ tests:
       - frdm_mcxe247@w25q64
       - frdm_mcxe31b@w25q64
       - b_u585i_iot02a
+      - stm32l4r9i_disco
+      - b_l4s5i_iot01a
       - stm32h573i_dk
     integration_platforms:
       - native_sim
@@ -29,6 +31,8 @@ tests:
   drivers.mspi.flash.stm32.dma:
     platform_allow:
       - b_u585i_iot02a
+      - b_l4s5i_iot01a
+      - stm32l4r9i_disco
       - stm32h573i_dk
     integration_platforms:
       - stm32h573i_dk
@@ -37,6 +41,8 @@ tests:
   drivers.mspi.flash.stm32.memmap:
     platform_allow:
       - b_u585i_iot02a
+      - stm32l4r9i_disco
+      - b_l4s5i_iot01a
       - stm32h573i_dk
     integration_platforms:
       - stm32h573i_dk
