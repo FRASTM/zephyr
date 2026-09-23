@@ -1,0 +1,27 @@
+/*
+ * Copyright (c) 2026 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#include <zephyr/dt-bindings/memory-attr/memory-attr.h>
+#include <zephyr/dt-bindings/memory-attr/memory-attr-arm.h>
+
+/ {
+	aliases {
+		/* The sample gets the DT_ALIAS(flash0) as the mspi device */
+		flash0 = &ext_flash_ctrl;
+	};
+
+	octo_nor: memory@70000000 {
+		compatible = "zephyr,memory-region";
+		reg = <0x70000000 DT_SIZE_M(64)>;
+		zephyr,memory-region = "EXTMEM";
+		/* The ATTR_MPU_EXTMEM attribute causing a MPU FAULT */
+		zephyr,memory-attr = <DT_MEM_ARM(ATTR_MPU_IO)>;
+	};
+};
+
+&ext_flash_ctrl {
+	/* Allow Rd in MemoryMapped mode (permission = 1) */
+	memmap-config = <1 0 DT_SIZE_M(64) 1>;
+};
